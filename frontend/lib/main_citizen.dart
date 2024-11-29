@@ -1,23 +1,45 @@
 import 'package:flutter/material.dart';
-import 'Screens/CitizenScreen.dart';
+import 'package:frontend/Screens/CitizenScreen.dart';
 
 void main() {
   runApp(const CitizenApp());
 }
 
-class CitizenApp extends StatelessWidget {
+class CitizenApp extends StatefulWidget {
   const CitizenApp({super.key});
+
+  @override
+  State<CitizenApp> createState() => _CitizenAppState();
+}
+
+class _CitizenAppState extends State<CitizenApp> {
+  bool isDarkMode = true; // Start with dark mode by default
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      theme: ThemeData.dark().copyWith(
+      theme: ThemeData.light(), // Light theme
+      darkTheme: ThemeData.dark().copyWith(
         scaffoldBackgroundColor: const Color.fromARGB(255, 18, 32, 47),
-      ),
+      ), // Dark theme
+      themeMode: isDarkMode ? ThemeMode.dark : ThemeMode.light, // Dynamic theme
       home: Scaffold(
-        body: ListView(children: [
-          CitizenScreen(),
-        ]),
+        appBar: AppBar(
+          title: const Text('Citizen App'),
+          actions: [
+            IconButton(
+              icon: Icon(isDarkMode ? Icons.light_mode : Icons.dark_mode),
+              onPressed: () {
+                setState(() {
+                  isDarkMode = !isDarkMode; // Toggle theme mode
+                });
+              },
+            ),
+          ],
+        ),
+        body: SizedBox.expand(
+          child: CitizenScreen(),
+        ),
       ),
     );
   }
