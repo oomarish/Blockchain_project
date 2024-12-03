@@ -1,0 +1,15 @@
+# install node and npm
+node -v
+npm -v
+npm install -g truffle
+npm install -g ganache
+# interface download link : https://archive.trufflesuite.com/ganache/
+npm install -g solc
+# install metamask extension for browser
+# inside backend folder
+npm init -y
+npm install web3
+truffle init
+# deployment steps
+truffle compile
+# build file will be made

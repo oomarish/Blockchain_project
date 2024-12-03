@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class CitizenScreen extends StatelessWidget {
-  CitizenScreen({Key? key}) : super(key: key);
+  CitizenScreen({super.key});
 
   // Controllers to capture form input
   final TextEditingController nameController = TextEditingController();

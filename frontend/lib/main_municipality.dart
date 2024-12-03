@@ -37,7 +37,7 @@ class _MunicipalityAppState extends State<MunicipalityApp> {
             ),
           ],
         ),
-        body: SizedBox.expand(
+        body: const SizedBox.expand(
           child: MunicipalityScreen(),
         ),
       ),
