@@ -1,3 +1,6 @@
+const { exec } = require('child_process');
+const path = require('path');
+
 /**
  * Use this file to configure your truffle project. It's seeded with some
  * common settings for different networks and features like migrations,
@@ -117,6 +120,16 @@ module.exports = {
       // }
     }
   },
+  afterCompile: async () => {
+    console.log('after compile');
+    exec('node ./copyAbi.js', (err, stdout, stderr) => {
+      if (err) {
+        console.error('Error copying ABI files:', stderr);
+      } else {
+        console.log(stdout);
+      }
+    });
+  }
 
   // Truffle DB is currently disabled by default; to enable it, change enabled:
   // false to enabled: true. The default storage location can also be

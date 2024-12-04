@@ -13,3 +13,5 @@ truffle init
 # deployment steps
 truffle compile
 # build file will be made
+# update the abi files inside frontend
+node ./copyAbi.js

@@ -1,8 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/Screens/CitizenScreen.dart';
+import 'package:provider/provider.dart';
+import 'Controllers/citizen_controller.dart';
 
 void main() {
-  runApp(const CitizenApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(
+          create: (context) => CitizenContractLinking(),
+        ),
+      ],
+      child: CitizenApp(),
+    ),
+  );
 }
 
 class CitizenApp extends StatefulWidget {
