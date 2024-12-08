@@ -70,7 +70,7 @@ class CitizenScreen extends StatelessWidget {
                     keyboardType: TextInputType.emailAddress,
                   ),
                   // Use FlutterMap here instead of GoogleMap
-                  Container(
+                  SizedBox(
                     height: 300,
                     width: double.infinity,
                     child: FlutterMap(
@@ -212,6 +212,8 @@ class CitizenScreen extends StatelessWidget {
 
 // Map Screen to select the coordinates
 class MapScreen extends StatefulWidget {
+  const MapScreen({super.key});
+
   @override
   _MapScreenState createState() => _MapScreenState();
 }
@@ -225,7 +227,7 @@ class _MapScreenState extends State<MapScreen> {
       appBar: AppBar(title: const Text('Select Hole Location')),
       body: Column(
         children: [
-          Container(
+          SizedBox(
             height: 400,
             width: double.infinity,
             child: FlutterMap(

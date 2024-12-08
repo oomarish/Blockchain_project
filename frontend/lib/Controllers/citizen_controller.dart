@@ -9,9 +9,9 @@ import 'package:web_socket_channel/io.dart';
 
 class CitizenContractLinking extends ChangeNotifier {
   final String _rpcUrl = "http://127.0.0.1:7545"; // Ganache RPC URL
-  final String _wsUrl = "ws://127.0.0.1:40749/"; // WebSocket URL
+  final String _wsUrl = "ws://127.0.0.1:63046/"; // WebSocket URL
   final String _privateKey =
-      "0x81973971d991152811c87d2616b5b1b39812c86eff262f27af747d97d630571b"; // Private key for the test account
+      "0x0637d35fbeede259a4d9f7aeeda1334c7719916df22b2b6e031cdb54f1f8e7f5"; // Private key for the test account
 
   late Web3Client _client;
   late bool isLoading = false;

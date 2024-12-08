@@ -8,8 +8,11 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
   "dependencies": {
-    "web3": "^4.15.0"
-  }
+    "web3": "^4.16.0"
+  },
+  "directories": {
+    "test": "test"
+  },
+  "description": ""
 }
