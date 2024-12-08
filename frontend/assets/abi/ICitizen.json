@@ -1,0 +1,3899 @@
+{
+  "contractName": "ICitizen",
+  "abi": [
+    {
+      "inputs": [],
+      "name": "getAllReports",
+      "outputs": [
+        {
+          "components": [
+            {
+              "internalType": "uint256",
+              "name": "id",
+              "type": "uint256"
+            },
+            {
+              "internalType": "string",
+              "name": "location",
+              "type": "string"
+            },
+            {
+              "internalType": "uint256",
+              "name": "timestamp",
+              "type": "uint256"
+            },
+            {
+              "internalType": "address",
+              "name": "reporter",
+              "type": "address"
+            },
+            {
+              "internalType": "enum Municipality.HoleState",
+              "name": "state",
+              "type": "uint8"
+            }
+          ],
+          "internalType": "struct ICitizen.Report[]",
+          "name": "",
+          "type": "tuple[]"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "metadata": "{\"compiler\":{\"version\":\"0.8.19+commit.7dd6d404\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[],\"name\":\"getAllReports\",\"outputs\":[{\"components\":[{\"internalType\":\"uint256\",\"name\":\"id\",\"type\":\"uint256\"},{\"internalType\":\"string\",\"name\":\"location\",\"type\":\"string\"},{\"internalType\":\"uint256\",\"name\":\"timestamp\",\"type\":\"uint256\"},{\"internalType\":\"address\",\"name\":\"reporter\",\"type\":\"address\"},{\"internalType\":\"enum Municipality.HoleState\",\"name\":\"state\",\"type\":\"uint8\"}],\"internalType\":\"struct ICitizen.Report[]\",\"name\":\"\",\"type\":\"tuple[]\"}],\"stateMutability\":\"view\",\"type\":\"function\"}],\"devdoc\":{\"kind\":\"dev\",\"methods\":{},\"version\":1},\"userdoc\":{\"kind\":\"user\",\"methods\":{},\"version\":1}},\"settings\":{\"compilationTarget\":{\"project:/contracts/municipality.sol\":\"ICitizen\"},\"evmVersion\":\"paris\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]},\"sources\":{\"project:/contracts/municipality.sol\":{\"keccak256\":\"0x89d85ad4f30b78c774d7982fdd09f09c62c42af6bfdd1908693f64291d0bb941\",\"license\":\"MIT\",\"urls\":[\"bzz-raw://921c6d482dffe7b2d1dadc7fc62f8f05b9f6b21ac630982d366bdd75659d64e7\",\"dweb:/ipfs/QmZwKxBTnwHGt7CR4cJHWHmN1N3B2Xd33HLMLVWZDPpetG\"]}},\"version\":1}",
+  "bytecode": "0x",
+  "deployedBytecode": "0x",
+  "immutableReferences": {},
+  "generatedSources": [],
+  "deployedGeneratedSources": [],
+  "sourceMap": "",
+  "deployedSourceMap": "",
+  "source": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.19;\n\ninterface ICitizen {\n    struct Report {\n        uint256 id;\n        string location;\n        uint256 timestamp;\n        address reporter;\n        Municipality.HoleState state;\n    }\n    \n    function getAllReports() external view returns (Report[] memory);\n}\n\ncontract Municipality {\n    enum HoleState { Pending, Fixing, Fixed }\n\n    uint256[] public reportIds;\n\n    struct Report {\n        uint256 id;\n        string location;\n        uint256 timestamp;\n        address reporter;\n        HoleState state;\n        uint256 stateTimestamp; // Timestamp when the state was last updated\n    }\n\n    uint256 public reportCount;\n    mapping(uint256 => Report) public reports;\n    mapping(string => uint256) public locationReportCount;\n\n    // New mappings and array for transferring reports\n    mapping(uint256 => Report) public municipalityReports;\n    uint256[] public municipalityReportIds;\n\n    // Citizen contract interface\n    ICitizen public citizenContract;\n\n    // Event emitted when a hole's state changes\n    event HoleStateChanged(uint256 id, HoleState state, uint256 timestamp);\n\n    // Event emitted when a new hole is reported\n    event HoleReported(uint256 id, string location, address reporter);\n\n    // Constructor to initialize the Citizen contract address\n    constructor(address _citizenContract) {\n        citizenContract = ICitizen(_citizenContract);\n    }\n\n    // Function to update the hole's state (municipality's action)\n    function updateHoleState(uint256 reportId, HoleState newState) public {\n        Report storage report = reports[reportId];\n        \n        // Ensure the report exists\n        require(report.id != 0, \"Report does not exist\");\n        \n        // Set the new state and timestamp\n        report.state = newState;\n        report.stateTimestamp = block.timestamp;\n        \n        emit HoleStateChanged(reportId, newState, block.timestamp);\n    }\n\n    // Function to create or manage a report (initially pending)\n    function createReport(uint256 id, string memory location, address reporter) public {\n        reportCount++;\n        reports[reportCount] = Report(reportCount, location, block.timestamp, reporter, HoleState.Pending, block.timestamp);\n        \n        // Debugging: Verify if report is added correctly\n        require(reports[reportCount].id == reportCount, \"Report was not added properly\");\n\n        // Emit both events: HoleReported and HoleStateChanged\n        emit HoleReported(reportCount, location, reporter);\n        emit HoleStateChanged(reportCount, HoleState.Pending, block.timestamp);\n    }\n\n    // Function to transfer reports from the Citizen contract to the Municipality contract\n    function transferReports() public {\n        ICitizen.Report[] memory allReports = citizenContract.getAllReports();  // Retrieve reports from the Citizen contract\n\n        for (uint256 i = 0; i < allReports.length; i++) {\n            municipalityReports[allReports[i].id] = Report(\n                allReports[i].id,\n                allReports[i].location,\n                allReports[i].timestamp,\n                allReports[i].reporter,\n                allReports[i].state,\n                block.timestamp  // Initialize with the current timestamp\n            );\n            municipalityReportIds.push(allReports[i].id);\n        }\n    }\n\n    // Function to retrieve all reports from the Municipality contract\n    function getAllMunicipalityReports() public view returns (Report[] memory) {\n        Report[] memory allReports = new Report[](municipalityReportIds.length);\n        for (uint256 i = 0; i < municipalityReportIds.length; i++) {\n            allReports[i] = municipalityReports[municipalityReportIds[i]];\n        }\n        return allReports;\n    }\n}\n",
+  "sourcePath": "/home/omar/FlutterProjects/Blockchain_project/backend/contracts/municipality.sol",
+  "ast": {
+    "absolutePath": "project:/contracts/municipality.sol",
+    "exportedSymbols": {
+      "ICitizen": [
+        449
+      ],
+      "Municipality": [
+        733
+      ]
+    },
+    "id": 734,
+    "license": "MIT",
+    "nodeType": "SourceUnit",
+    "nodes": [
+      {
+        "id": 429,
+        "literals": [
+          "solidity",
+          "^",
+          "0.8",
+          ".19"
+        ],
+        "nodeType": "PragmaDirective",
+        "src": "32:24:2"
+      },
+      {
+        "abstract": false,
+        "baseContracts": [],
+        "canonicalName": "ICitizen",
+        "contractDependencies": [],
+        "contractKind": "interface",
+        "fullyImplemented": false,
+        "id": 449,
+        "linearizedBaseContracts": [
+          449
+        ],
+        "name": "ICitizen",
+        "nameLocation": "68:8:2",
+        "nodeType": "ContractDefinition",
+        "nodes": [
+          {
+            "canonicalName": "ICitizen.Report",
+            "id": 441,
+            "members": [
+              {
+                "constant": false,
+                "id": 431,
+                "mutability": "mutable",
+                "name": "id",
+                "nameLocation": "115:2:2",
+                "nodeType": "VariableDeclaration",
+                "scope": 441,
+                "src": "107:10:2",
+                "stateVariable": false,
+                "storageLocation": "default",
+                "typeDescriptions": {
+                  "typeIdentifier": "t_uint256",
+                  "typeString": "uint256"
+                },
+                "typeName": {
+                  "id": 430,
+                  "name": "uint256",
+                  "nodeType": "ElementaryTypeName",
+                  "src": "107:7:2",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_uint256",
+                    "typeString": "uint256"
+                  }
+                },
+                "visibility": "internal"
+              },
+              {
+                "constant": false,
+                "id": 433,
+                "mutability": "mutable",
+                "name": "location",
+                "nameLocation": "134:8:2",
+                "nodeType": "VariableDeclaration",
+                "scope": 441,
+                "src": "127:15:2",
+                "stateVariable": false,
+                "storageLocation": "default",
+                "typeDescriptions": {
+                  "typeIdentifier": "t_string_storage_ptr",
+                  "typeString": "string"
+                },
+                "typeName": {
+                  "id": 432,
+                  "name": "string",
+                  "nodeType": "ElementaryTypeName",
+                  "src": "127:6:2",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_string_storage_ptr",
+                    "typeString": "string"
+                  }
+                },
+                "visibility": "internal"
+              },
+              {
+                "constant": false,
+                "id": 435,
+                "mutability": "mutable",
+                "name": "timestamp",
+                "nameLocation": "160:9:2",
+                "nodeType": "VariableDeclaration",
+                "scope": 441,
+                "src": "152:17:2",
+                "stateVariable": false,
+                "storageLocation": "default",
+                "typeDescriptions": {
+                  "typeIdentifier": "t_uint256",
+                  "typeString": "uint256"
+                },
+                "typeName": {
+                  "id": 434,
+                  "name": "uint256",
+                  "nodeType": "ElementaryTypeName",
+                  "src": "152:7:2",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_uint256",
+                    "typeString": "uint256"
+                  }
+                },
+                "visibility": "internal"
+              },
+              {
+                "constant": false,
+                "id": 437,
+                "mutability": "mutable",
+                "name": "reporter",
+                "nameLocation": "187:8:2",
+                "nodeType": "VariableDeclaration",
+                "scope": 441,
+                "src": "179:16:2",
+                "stateVariable": false,
+                "storageLocation": "default",
+                "typeDescriptions": {
+                  "typeIdentifier": "t_address",
+                  "typeString": "address"
+                },
+                "typeName": {
+                  "id": 436,
+                  "name": "address",
+                  "nodeType": "ElementaryTypeName",
+                  "src": "179:7:2",
+                  "stateMutability": "nonpayable",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_address",
+                    "typeString": "address"
+                  }
+                },
+                "visibility": "internal"
+              },
+              {
+                "constant": false,
+                "id": 440,
+                "mutability": "mutable",
+                "name": "state",
+                "nameLocation": "228:5:2",
+                "nodeType": "VariableDeclaration",
+                "scope": 441,
+                "src": "205:28:2",
+                "stateVariable": false,
+                "storageLocation": "default",
+                "typeDescriptions": {
+                  "typeIdentifier": "t_enum$_HoleState_$453",
+                  "typeString": "enum Municipality.HoleState"
+                },
+                "typeName": {
+                  "id": 439,
+                  "nodeType": "UserDefinedTypeName",
+                  "pathNode": {
+                    "id": 438,
+                    "name": "Municipality.HoleState",
+                    "nameLocations": [
+                      "205:12:2",
+                      "218:9:2"
+                    ],
+                    "nodeType": "IdentifierPath",
+                    "referencedDeclaration": 453,
+                    "src": "205:22:2"
+                  },
+                  "referencedDeclaration": 453,
+                  "src": "205:22:2",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_enum$_HoleState_$453",
+                    "typeString": "enum Municipality.HoleState"
+                  }
+                },
+                "visibility": "internal"
+              }
+            ],
+            "name": "Report",
+            "nameLocation": "90:6:2",
+            "nodeType": "StructDefinition",
+            "scope": 449,
+            "src": "83:157:2",
+            "visibility": "public"
+          },
+          {
+            "functionSelector": "f3d3ddfa",
+            "id": 448,
+            "implemented": false,
+            "kind": "function",
+            "modifiers": [],
+            "name": "getAllReports",
+            "nameLocation": "259:13:2",
+            "nodeType": "FunctionDefinition",
+            "parameters": {
+              "id": 442,
+              "nodeType": "ParameterList",
+              "parameters": [],
+              "src": "272:2:2"
+            },
+            "returnParameters": {
+              "id": 447,
+              "nodeType": "ParameterList",
+              "parameters": [
+                {
+                  "constant": false,
+                  "id": 446,
+                  "mutability": "mutable",
+                  "name": "",
+                  "nameLocation": "-1:-1:-1",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 448,
+                  "src": "298:15:2",
+                  "stateVariable": false,
+                  "storageLocation": "memory",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_array$_t_struct$_Report_$441_memory_ptr_$dyn_memory_ptr",
+                    "typeString": "struct ICitizen.Report[]"
+                  },
+                  "typeName": {
+                    "baseType": {
+                      "id": 444,
+                      "nodeType": "UserDefinedTypeName",
+                      "pathNode": {
+                        "id": 443,
+                        "name": "Report",
+                        "nameLocations": [
+                          "298:6:2"
+                        ],
+                        "nodeType": "IdentifierPath",
+                        "referencedDeclaration": 441,
+                        "src": "298:6:2"
+                      },
+                      "referencedDeclaration": 441,
+                      "src": "298:6:2",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_struct$_Report_$441_storage_ptr",
+                        "typeString": "struct ICitizen.Report"
+                      }
+                    },
+                    "id": 445,
+                    "nodeType": "ArrayTypeName",
+                    "src": "298:8:2",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_array$_t_struct$_Report_$441_storage_$dyn_storage_ptr",
+                      "typeString": "struct ICitizen.Report[]"
+                    }
+                  },
+                  "visibility": "internal"
+                }
+              ],
+              "src": "297:17:2"
+            },
+            "scope": 449,
+            "src": "250:65:2",
+            "stateMutability": "view",
+            "virtual": false,
+            "visibility": "external"
+          }
+        ],
+        "scope": 734,
+        "src": "58:259:2",
+        "usedErrors": []
+      },
+      {
+        "abstract": false,
+        "baseContracts": [],
+        "canonicalName": "Municipality",
+        "contractDependencies": [],
+        "contractKind": "contract",
+        "fullyImplemented": true,
+        "id": 733,
+        "linearizedBaseContracts": [
+          733
+        ],
+        "name": "Municipality",
+        "nameLocation": "328:12:2",
+        "nodeType": "ContractDefinition",
+        "nodes": [
+          {
+            "canonicalName": "Municipality.HoleState",
+            "id": 453,
+            "members": [
+              {
+                "id": 450,
+                "name": "Pending",
+                "nameLocation": "364:7:2",
+                "nodeType": "EnumValue",
+                "src": "364:7:2"
+              },
+              {
+                "id": 451,
+                "name": "Fixing",
+                "nameLocation": "373:6:2",
+                "nodeType": "EnumValue",
+                "src": "373:6:2"
+              },
+              {
+                "id": 452,
+                "name": "Fixed",
+                "nameLocation": "381:5:2",
+                "nodeType": "EnumValue",
+                "src": "381:5:2"
+              }
+            ],
+            "name": "HoleState",
+            "nameLocation": "352:9:2",
+            "nodeType": "EnumDefinition",
+            "src": "347:41:2"
+          },
+          {
+            "constant": false,
+            "functionSelector": "87cc66de",
+            "id": 456,
+            "mutability": "mutable",
+            "name": "reportIds",
+            "nameLocation": "411:9:2",
+            "nodeType": "VariableDeclaration",
+            "scope": 733,
+            "src": "394:26:2",
+            "stateVariable": true,
+            "storageLocation": "default",
+            "typeDescriptions": {
+              "typeIdentifier": "t_array$_t_uint256_$dyn_storage",
+              "typeString": "uint256[]"
+            },
+            "typeName": {
+              "baseType": {
+                "id": 454,
+                "name": "uint256",
+                "nodeType": "ElementaryTypeName",
+                "src": "394:7:2",
+                "typeDescriptions": {
+                  "typeIdentifier": "t_uint256",
+                  "typeString": "uint256"
+                }
+              },
+              "id": 455,
+              "nodeType": "ArrayTypeName",
+              "src": "394:9:2",
+              "typeDescriptions": {
+                "typeIdentifier": "t_array$_t_uint256_$dyn_storage_ptr",
+                "typeString": "uint256[]"
+              }
+            },
+            "visibility": "public"
+          },
+          {
+            "canonicalName": "Municipality.Report",
+            "id": 470,
+            "members": [
+              {
+                "constant": false,
+                "id": 458,
+                "mutability": "mutable",
+                "name": "id",
+                "nameLocation": "459:2:2",
+                "nodeType": "VariableDeclaration",
+                "scope": 470,
+                "src": "451:10:2",
+                "stateVariable": false,
+                "storageLocation": "default",
+                "typeDescriptions": {
+                  "typeIdentifier": "t_uint256",
+                  "typeString": "uint256"
+                },
+                "typeName": {
+                  "id": 457,
+                  "name": "uint256",
+                  "nodeType": "ElementaryTypeName",
+                  "src": "451:7:2",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_uint256",
+                    "typeString": "uint256"
+                  }
+                },
+                "visibility": "internal"
+              },
+              {
+                "constant": false,
+                "id": 460,
+                "mutability": "mutable",
+                "name": "location",
+                "nameLocation": "478:8:2",
+                "nodeType": "VariableDeclaration",
+                "scope": 470,
+                "src": "471:15:2",
+                "stateVariable": false,
+                "storageLocation": "default",
+                "typeDescriptions": {
+                  "typeIdentifier": "t_string_storage_ptr",
+                  "typeString": "string"
+                },
+                "typeName": {
+                  "id": 459,
+                  "name": "string",
+                  "nodeType": "ElementaryTypeName",
+                  "src": "471:6:2",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_string_storage_ptr",
+                    "typeString": "string"
+                  }
+                },
+                "visibility": "internal"
+              },
+              {
+                "constant": false,
+                "id": 462,
+                "mutability": "mutable",
+                "name": "timestamp",
+                "nameLocation": "504:9:2",
+                "nodeType": "VariableDeclaration",
+                "scope": 470,
+                "src": "496:17:2",
+                "stateVariable": false,
+                "storageLocation": "default",
+                "typeDescriptions": {
+                  "typeIdentifier": "t_uint256",
+                  "typeString": "uint256"
+                },
+                "typeName": {
+                  "id": 461,
+                  "name": "uint256",
+                  "nodeType": "ElementaryTypeName",
+                  "src": "496:7:2",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_uint256",
+                    "typeString": "uint256"
+                  }
+                },
+                "visibility": "internal"
+              },
+              {
+                "constant": false,
+                "id": 464,
+                "mutability": "mutable",
+                "name": "reporter",
+                "nameLocation": "531:8:2",
+                "nodeType": "VariableDeclaration",
+                "scope": 470,
+                "src": "523:16:2",
+                "stateVariable": false,
+                "storageLocation": "default",
+                "typeDescriptions": {
+                  "typeIdentifier": "t_address",
+                  "typeString": "address"
+                },
+                "typeName": {
+                  "id": 463,
+                  "name": "address",
+                  "nodeType": "ElementaryTypeName",
+                  "src": "523:7:2",
+                  "stateMutability": "nonpayable",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_address",
+                    "typeString": "address"
+                  }
+                },
+                "visibility": "internal"
+              },
+              {
+                "constant": false,
+                "id": 467,
+                "mutability": "mutable",
+                "name": "state",
+                "nameLocation": "559:5:2",
+                "nodeType": "VariableDeclaration",
+                "scope": 470,
+                "src": "549:15:2",
+                "stateVariable": false,
+                "storageLocation": "default",
+                "typeDescriptions": {
+                  "typeIdentifier": "t_enum$_HoleState_$453",
+                  "typeString": "enum Municipality.HoleState"
+                },
+                "typeName": {
+                  "id": 466,
+                  "nodeType": "UserDefinedTypeName",
+                  "pathNode": {
+                    "id": 465,
+                    "name": "HoleState",
+                    "nameLocations": [
+                      "549:9:2"
+                    ],
+                    "nodeType": "IdentifierPath",
+                    "referencedDeclaration": 453,
+                    "src": "549:9:2"
+                  },
+                  "referencedDeclaration": 453,
+                  "src": "549:9:2",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_enum$_HoleState_$453",
+                    "typeString": "enum Municipality.HoleState"
+                  }
+                },
+                "visibility": "internal"
+              },
+              {
+                "constant": false,
+                "id": 469,
+                "mutability": "mutable",
+                "name": "stateTimestamp",
+                "nameLocation": "582:14:2",
+                "nodeType": "VariableDeclaration",
+                "scope": 470,
+                "src": "574:22:2",
+                "stateVariable": false,
+                "storageLocation": "default",
+                "typeDescriptions": {
+                  "typeIdentifier": "t_uint256",
+                  "typeString": "uint256"
+                },
+                "typeName": {
+                  "id": 468,
+                  "name": "uint256",
+                  "nodeType": "ElementaryTypeName",
+                  "src": "574:7:2",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_uint256",
+                    "typeString": "uint256"
+                  }
+                },
+                "visibility": "internal"
+              }
+            ],
+            "name": "Report",
+            "nameLocation": "434:6:2",
+            "nodeType": "StructDefinition",
+            "scope": 733,
+            "src": "427:221:2",
+            "visibility": "public"
+          },
+          {
+            "constant": false,
+            "functionSelector": "185c6f84",
+            "id": 472,
+            "mutability": "mutable",
+            "name": "reportCount",
+            "nameLocation": "669:11:2",
+            "nodeType": "VariableDeclaration",
+            "scope": 733,
+            "src": "654:26:2",
+            "stateVariable": true,
+            "storageLocation": "default",
+            "typeDescriptions": {
+              "typeIdentifier": "t_uint256",
+              "typeString": "uint256"
+            },
+            "typeName": {
+              "id": 471,
+              "name": "uint256",
+              "nodeType": "ElementaryTypeName",
+              "src": "654:7:2",
+              "typeDescriptions": {
+                "typeIdentifier": "t_uint256",
+                "typeString": "uint256"
+              }
+            },
+            "visibility": "public"
+          },
+          {
+            "constant": false,
+            "functionSelector": "c942adf7",
+            "id": 477,
+            "mutability": "mutable",
+            "name": "reports",
+            "nameLocation": "720:7:2",
+            "nodeType": "VariableDeclaration",
+            "scope": 733,
+            "src": "686:41:2",
+            "stateVariable": true,
+            "storageLocation": "default",
+            "typeDescriptions": {
+              "typeIdentifier": "t_mapping$_t_uint256_$_t_struct$_Report_$470_storage_$",
+              "typeString": "mapping(uint256 => struct Municipality.Report)"
+            },
+            "typeName": {
+              "id": 476,
+              "keyName": "",
+              "keyNameLocation": "-1:-1:-1",
+              "keyType": {
+                "id": 473,
+                "name": "uint256",
+                "nodeType": "ElementaryTypeName",
+                "src": "694:7:2",
+                "typeDescriptions": {
+                  "typeIdentifier": "t_uint256",
+                  "typeString": "uint256"
+                }
+              },
+              "nodeType": "Mapping",
+              "src": "686:26:2",
+              "typeDescriptions": {
+                "typeIdentifier": "t_mapping$_t_uint256_$_t_struct$_Report_$470_storage_$",
+                "typeString": "mapping(uint256 => struct Municipality.Report)"
+              },
+              "valueName": "",
+              "valueNameLocation": "-1:-1:-1",
+              "valueType": {
+                "id": 475,
+                "nodeType": "UserDefinedTypeName",
+                "pathNode": {
+                  "id": 474,
+                  "name": "Report",
+                  "nameLocations": [
+                    "705:6:2"
+                  ],
+                  "nodeType": "IdentifierPath",
+                  "referencedDeclaration": 470,
+                  "src": "705:6:2"
+                },
+                "referencedDeclaration": 470,
+                "src": "705:6:2",
+                "typeDescriptions": {
+                  "typeIdentifier": "t_struct$_Report_$470_storage_ptr",
+                  "typeString": "struct Municipality.Report"
+                }
+              }
+            },
+            "visibility": "public"
+          },
+          {
+            "constant": false,
+            "functionSelector": "40216d20",
+            "id": 481,
+            "mutability": "mutable",
+            "name": "locationReportCount",
+            "nameLocation": "767:19:2",
+            "nodeType": "VariableDeclaration",
+            "scope": 733,
+            "src": "733:53:2",
+            "stateVariable": true,
+            "storageLocation": "default",
+            "typeDescriptions": {
+              "typeIdentifier": "t_mapping$_t_string_memory_ptr_$_t_uint256_$",
+              "typeString": "mapping(string => uint256)"
+            },
+            "typeName": {
+              "id": 480,
+              "keyName": "",
+              "keyNameLocation": "-1:-1:-1",
+              "keyType": {
+                "id": 478,
+                "name": "string",
+                "nodeType": "ElementaryTypeName",
+                "src": "741:6:2",
+                "typeDescriptions": {
+                  "typeIdentifier": "t_string_storage_ptr",
+                  "typeString": "string"
+                }
+              },
+              "nodeType": "Mapping",
+              "src": "733:26:2",
+              "typeDescriptions": {
+                "typeIdentifier": "t_mapping$_t_string_memory_ptr_$_t_uint256_$",
+                "typeString": "mapping(string => uint256)"
+              },
+              "valueName": "",
+              "valueNameLocation": "-1:-1:-1",
+              "valueType": {
+                "id": 479,
+                "name": "uint256",
+                "nodeType": "ElementaryTypeName",
+                "src": "751:7:2",
+                "typeDescriptions": {
+                  "typeIdentifier": "t_uint256",
+                  "typeString": "uint256"
+                }
+              }
+            },
+            "visibility": "public"
+          },
+          {
+            "constant": false,
+            "functionSelector": "ce338a92",
+            "id": 486,
+            "mutability": "mutable",
+            "name": "municipalityReports",
+            "nameLocation": "882:19:2",
+            "nodeType": "VariableDeclaration",
+            "scope": 733,
+            "src": "848:53:2",
+            "stateVariable": true,
+            "storageLocation": "default",
+            "typeDescriptions": {
+              "typeIdentifier": "t_mapping$_t_uint256_$_t_struct$_Report_$470_storage_$",
+              "typeString": "mapping(uint256 => struct Municipality.Report)"
+            },
+            "typeName": {
+              "id": 485,
+              "keyName": "",
+              "keyNameLocation": "-1:-1:-1",
+              "keyType": {
+                "id": 482,
+                "name": "uint256",
+                "nodeType": "ElementaryTypeName",
+                "src": "856:7:2",
+                "typeDescriptions": {
+                  "typeIdentifier": "t_uint256",
+                  "typeString": "uint256"
+                }
+              },
+              "nodeType": "Mapping",
+              "src": "848:26:2",
+              "typeDescriptions": {
+                "typeIdentifier": "t_mapping$_t_uint256_$_t_struct$_Report_$470_storage_$",
+                "typeString": "mapping(uint256 => struct Municipality.Report)"
+              },
+              "valueName": "",
+              "valueNameLocation": "-1:-1:-1",
+              "valueType": {
+                "id": 484,
+                "nodeType": "UserDefinedTypeName",
+                "pathNode": {
+                  "id": 483,
+                  "name": "Report",
+                  "nameLocations": [
+                    "867:6:2"
+                  ],
+                  "nodeType": "IdentifierPath",
+                  "referencedDeclaration": 470,
+                  "src": "867:6:2"
+                },
+                "referencedDeclaration": 470,
+                "src": "867:6:2",
+                "typeDescriptions": {
+                  "typeIdentifier": "t_struct$_Report_$470_storage_ptr",
+                  "typeString": "struct Municipality.Report"
+                }
+              }
+            },
+            "visibility": "public"
+          },
+          {
+            "constant": false,
+            "functionSelector": "82419679",
+            "id": 489,
+            "mutability": "mutable",
+            "name": "municipalityReportIds",
+            "nameLocation": "924:21:2",
+            "nodeType": "VariableDeclaration",
+            "scope": 733,
+            "src": "907:38:2",
+            "stateVariable": true,
+            "storageLocation": "default",
+            "typeDescriptions": {
+              "typeIdentifier": "t_array$_t_uint256_$dyn_storage",
+              "typeString": "uint256[]"
+            },
+            "typeName": {
+              "baseType": {
+                "id": 487,
+                "name": "uint256",
+                "nodeType": "ElementaryTypeName",
+                "src": "907:7:2",
+                "typeDescriptions": {
+                  "typeIdentifier": "t_uint256",
+                  "typeString": "uint256"
+                }
+              },
+              "id": 488,
+              "nodeType": "ArrayTypeName",
+              "src": "907:9:2",
+              "typeDescriptions": {
+                "typeIdentifier": "t_array$_t_uint256_$dyn_storage_ptr",
+                "typeString": "uint256[]"
+              }
+            },
+            "visibility": "public"
+          },
+          {
+            "constant": false,
+            "functionSelector": "cac49772",
+            "id": 492,
+            "mutability": "mutable",
+            "name": "citizenContract",
+            "nameLocation": "1002:15:2",
+            "nodeType": "VariableDeclaration",
+            "scope": 733,
+            "src": "986:31:2",
+            "stateVariable": true,
+            "storageLocation": "default",
+            "typeDescriptions": {
+              "typeIdentifier": "t_contract$_ICitizen_$449",
+              "typeString": "contract ICitizen"
+            },
+            "typeName": {
+              "id": 491,
+              "nodeType": "UserDefinedTypeName",
+              "pathNode": {
+                "id": 490,
+                "name": "ICitizen",
+                "nameLocations": [
+                  "986:8:2"
+                ],
+                "nodeType": "IdentifierPath",
+                "referencedDeclaration": 449,
+                "src": "986:8:2"
+              },
+              "referencedDeclaration": 449,
+              "src": "986:8:2",
+              "typeDescriptions": {
+                "typeIdentifier": "t_contract$_ICitizen_$449",
+                "typeString": "contract ICitizen"
+              }
+            },
+            "visibility": "public"
+          },
+          {
+            "anonymous": false,
+            "eventSelector": "a09c6409fa68b5535425f910a99a09dfc514efe1b214009edc6d7dc8b33692bf",
+            "id": 501,
+            "name": "HoleStateChanged",
+            "nameLocation": "1079:16:2",
+            "nodeType": "EventDefinition",
+            "parameters": {
+              "id": 500,
+              "nodeType": "ParameterList",
+              "parameters": [
+                {
+                  "constant": false,
+                  "id": 494,
+                  "indexed": false,
+                  "mutability": "mutable",
+                  "name": "id",
+                  "nameLocation": "1104:2:2",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 501,
+                  "src": "1096:10:2",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_uint256",
+                    "typeString": "uint256"
+                  },
+                  "typeName": {
+                    "id": 493,
+                    "name": "uint256",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "1096:7:2",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_uint256",
+                      "typeString": "uint256"
+                    }
+                  },
+                  "visibility": "internal"
+                },
+                {
+                  "constant": false,
+                  "id": 497,
+                  "indexed": false,
+                  "mutability": "mutable",
+                  "name": "state",
+                  "nameLocation": "1118:5:2",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 501,
+                  "src": "1108:15:2",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_enum$_HoleState_$453",
+                    "typeString": "enum Municipality.HoleState"
+                  },
+                  "typeName": {
+                    "id": 496,
+                    "nodeType": "UserDefinedTypeName",
+                    "pathNode": {
+                      "id": 495,
+                      "name": "HoleState",
+                      "nameLocations": [
+                        "1108:9:2"
+                      ],
+                      "nodeType": "IdentifierPath",
+                      "referencedDeclaration": 453,
+                      "src": "1108:9:2"
+                    },
+                    "referencedDeclaration": 453,
+                    "src": "1108:9:2",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_enum$_HoleState_$453",
+                      "typeString": "enum Municipality.HoleState"
+                    }
+                  },
+                  "visibility": "internal"
+                },
+                {
+                  "constant": false,
+                  "id": 499,
+                  "indexed": false,
+                  "mutability": "mutable",
+                  "name": "timestamp",
+                  "nameLocation": "1133:9:2",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 501,
+                  "src": "1125:17:2",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_uint256",
+                    "typeString": "uint256"
+                  },
+                  "typeName": {
+                    "id": 498,
+                    "name": "uint256",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "1125:7:2",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_uint256",
+                      "typeString": "uint256"
+                    }
+                  },
+                  "visibility": "internal"
+                }
+              ],
+              "src": "1095:48:2"
+            },
+            "src": "1073:71:2"
+          },
+          {
+            "anonymous": false,
+            "eventSelector": "ef68dfa45b32e7a9ba84a4219914430fdb97257b2ca6432f4b68500597c611d2",
+            "id": 509,
+            "name": "HoleReported",
+            "nameLocation": "1205:12:2",
+            "nodeType": "EventDefinition",
+            "parameters": {
+              "id": 508,
+              "nodeType": "ParameterList",
+              "parameters": [
+                {
+                  "constant": false,
+                  "id": 503,
+                  "indexed": false,
+                  "mutability": "mutable",
+                  "name": "id",
+                  "nameLocation": "1226:2:2",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 509,
+                  "src": "1218:10:2",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_uint256",
+                    "typeString": "uint256"
+                  },
+                  "typeName": {
+                    "id": 502,
+                    "name": "uint256",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "1218:7:2",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_uint256",
+                      "typeString": "uint256"
+                    }
+                  },
+                  "visibility": "internal"
+                },
+                {
+                  "constant": false,
+                  "id": 505,
+                  "indexed": false,
+                  "mutability": "mutable",
+                  "name": "location",
+                  "nameLocation": "1237:8:2",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 509,
+                  "src": "1230:15:2",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_string_memory_ptr",
+                    "typeString": "string"
+                  },
+                  "typeName": {
+                    "id": 504,
+                    "name": "string",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "1230:6:2",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_string_storage_ptr",
+                      "typeString": "string"
+                    }
+                  },
+                  "visibility": "internal"
+                },
+                {
+                  "constant": false,
+                  "id": 507,
+                  "indexed": false,
+                  "mutability": "mutable",
+                  "name": "reporter",
+                  "nameLocation": "1255:8:2",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 509,
+                  "src": "1247:16:2",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_address",
+                    "typeString": "address"
+                  },
+                  "typeName": {
+                    "id": 506,
+                    "name": "address",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "1247:7:2",
+                    "stateMutability": "nonpayable",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_address",
+                      "typeString": "address"
+                    }
+                  },
+                  "visibility": "internal"
+                }
+              ],
+              "src": "1217:47:2"
+            },
+            "src": "1199:66:2"
+          },
+          {
+            "body": {
+              "id": 520,
+              "nodeType": "Block",
+              "src": "1371:61:2",
+              "statements": [
+                {
+                  "expression": {
+                    "id": 518,
+                    "isConstant": false,
+                    "isLValue": false,
+                    "isPure": false,
+                    "lValueRequested": false,
+                    "leftHandSide": {
+                      "id": 514,
+                      "name": "citizenContract",
+                      "nodeType": "Identifier",
+                      "overloadedDeclarations": [],
+                      "referencedDeclaration": 492,
+                      "src": "1381:15:2",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_contract$_ICitizen_$449",
+                        "typeString": "contract ICitizen"
+                      }
+                    },
+                    "nodeType": "Assignment",
+                    "operator": "=",
+                    "rightHandSide": {
+                      "arguments": [
+                        {
+                          "id": 516,
+                          "name": "_citizenContract",
+                          "nodeType": "Identifier",
+                          "overloadedDeclarations": [],
+                          "referencedDeclaration": 511,
+                          "src": "1408:16:2",
+                          "typeDescriptions": {
+                            "typeIdentifier": "t_address",
+                            "typeString": "address"
+                          }
+                        }
+                      ],
+                      "expression": {
+                        "argumentTypes": [
+                          {
+                            "typeIdentifier": "t_address",
+                            "typeString": "address"
+                          }
+                        ],
+                        "id": 515,
+                        "name": "ICitizen",
+                        "nodeType": "Identifier",
+                        "overloadedDeclarations": [],
+                        "referencedDeclaration": 449,
+                        "src": "1399:8:2",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_type$_t_contract$_ICitizen_$449_$",
+                          "typeString": "type(contract ICitizen)"
+                        }
+                      },
+                      "id": 517,
+                      "isConstant": false,
+                      "isLValue": false,
+                      "isPure": false,
+                      "kind": "typeConversion",
+                      "lValueRequested": false,
+                      "nameLocations": [],
+                      "names": [],
+                      "nodeType": "FunctionCall",
+                      "src": "1399:26:2",
+                      "tryCall": false,
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_contract$_ICitizen_$449",
+                        "typeString": "contract ICitizen"
+                      }
+                    },
+                    "src": "1381:44:2",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_contract$_ICitizen_$449",
+                      "typeString": "contract ICitizen"
+                    }
+                  },
+                  "id": 519,
+                  "nodeType": "ExpressionStatement",
+                  "src": "1381:44:2"
+                }
+              ]
+            },
+            "id": 521,
+            "implemented": true,
+            "kind": "constructor",
+            "modifiers": [],
+            "name": "",
+            "nameLocation": "-1:-1:-1",
+            "nodeType": "FunctionDefinition",
+            "parameters": {
+              "id": 512,
+              "nodeType": "ParameterList",
+              "parameters": [
+                {
+                  "constant": false,
+                  "id": 511,
+                  "mutability": "mutable",
+                  "name": "_citizenContract",
+                  "nameLocation": "1353:16:2",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 521,
+                  "src": "1345:24:2",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_address",
+                    "typeString": "address"
+                  },
+                  "typeName": {
+                    "id": 510,
+                    "name": "address",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "1345:7:2",
+                    "stateMutability": "nonpayable",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_address",
+                      "typeString": "address"
+                    }
+                  },
+                  "visibility": "internal"
+                }
+              ],
+              "src": "1344:26:2"
+            },
+            "returnParameters": {
+              "id": 513,
+              "nodeType": "ParameterList",
+              "parameters": [],
+              "src": "1371:0:2"
+            },
+            "scope": 733,
+            "src": "1333:99:2",
+            "stateMutability": "nonpayable",
+            "virtual": false,
+            "visibility": "public"
+          },
+          {
+            "body": {
+              "id": 564,
+              "nodeType": "Block",
+              "src": "1575:372:2",
+              "statements": [
+                {
+                  "assignments": [
+                    531
+                  ],
+                  "declarations": [
+                    {
+                      "constant": false,
+                      "id": 531,
+                      "mutability": "mutable",
+                      "name": "report",
+                      "nameLocation": "1600:6:2",
+                      "nodeType": "VariableDeclaration",
+                      "scope": 564,
+                      "src": "1585:21:2",
+                      "stateVariable": false,
+                      "storageLocation": "storage",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_struct$_Report_$470_storage_ptr",
+                        "typeString": "struct Municipality.Report"
+                      },
+                      "typeName": {
+                        "id": 530,
+                        "nodeType": "UserDefinedTypeName",
+                        "pathNode": {
+                          "id": 529,
+                          "name": "Report",
+                          "nameLocations": [
+                            "1585:6:2"
+                          ],
+                          "nodeType": "IdentifierPath",
+                          "referencedDeclaration": 470,
+                          "src": "1585:6:2"
+                        },
+                        "referencedDeclaration": 470,
+                        "src": "1585:6:2",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_struct$_Report_$470_storage_ptr",
+                          "typeString": "struct Municipality.Report"
+                        }
+                      },
+                      "visibility": "internal"
+                    }
+                  ],
+                  "id": 535,
+                  "initialValue": {
+                    "baseExpression": {
+                      "id": 532,
+                      "name": "reports",
+                      "nodeType": "Identifier",
+                      "overloadedDeclarations": [],
+                      "referencedDeclaration": 477,
+                      "src": "1609:7:2",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_mapping$_t_uint256_$_t_struct$_Report_$470_storage_$",
+                        "typeString": "mapping(uint256 => struct Municipality.Report storage ref)"
+                      }
+                    },
+                    "id": 534,
+                    "indexExpression": {
+                      "id": 533,
+                      "name": "reportId",
+                      "nodeType": "Identifier",
+                      "overloadedDeclarations": [],
+                      "referencedDeclaration": 523,
+                      "src": "1617:8:2",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_uint256",
+                        "typeString": "uint256"
+                      }
+                    },
+                    "isConstant": false,
+                    "isLValue": true,
+                    "isPure": false,
+                    "lValueRequested": false,
+                    "nodeType": "IndexAccess",
+                    "src": "1609:17:2",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_struct$_Report_$470_storage",
+                      "typeString": "struct Municipality.Report storage ref"
+                    }
+                  },
+                  "nodeType": "VariableDeclarationStatement",
+                  "src": "1585:41:2"
+                },
+                {
+                  "expression": {
+                    "arguments": [
+                      {
+                        "commonType": {
+                          "typeIdentifier": "t_uint256",
+                          "typeString": "uint256"
+                        },
+                        "id": 540,
+                        "isConstant": false,
+                        "isLValue": false,
+                        "isPure": false,
+                        "lValueRequested": false,
+                        "leftExpression": {
+                          "expression": {
+                            "id": 537,
+                            "name": "report",
+                            "nodeType": "Identifier",
+                            "overloadedDeclarations": [],
+                            "referencedDeclaration": 531,
+                            "src": "1689:6:2",
+                            "typeDescriptions": {
+                              "typeIdentifier": "t_struct$_Report_$470_storage_ptr",
+                              "typeString": "struct Municipality.Report storage pointer"
+                            }
+                          },
+                          "id": 538,
+                          "isConstant": false,
+                          "isLValue": true,
+                          "isPure": false,
+                          "lValueRequested": false,
+                          "memberLocation": "1696:2:2",
+                          "memberName": "id",
+                          "nodeType": "MemberAccess",
+                          "referencedDeclaration": 458,
+                          "src": "1689:9:2",
+                          "typeDescriptions": {
+                            "typeIdentifier": "t_uint256",
+                            "typeString": "uint256"
+                          }
+                        },
+                        "nodeType": "BinaryOperation",
+                        "operator": "!=",
+                        "rightExpression": {
+                          "hexValue": "30",
+                          "id": 539,
+                          "isConstant": false,
+                          "isLValue": false,
+                          "isPure": true,
+                          "kind": "number",
+                          "lValueRequested": false,
+                          "nodeType": "Literal",
+                          "src": "1702:1:2",
+                          "typeDescriptions": {
+                            "typeIdentifier": "t_rational_0_by_1",
+                            "typeString": "int_const 0"
+                          },
+                          "value": "0"
+                        },
+                        "src": "1689:14:2",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_bool",
+                          "typeString": "bool"
+                        }
+                      },
+                      {
+                        "hexValue": "5265706f727420646f6573206e6f74206578697374",
+                        "id": 541,
+                        "isConstant": false,
+                        "isLValue": false,
+                        "isPure": true,
+                        "kind": "string",
+                        "lValueRequested": false,
+                        "nodeType": "Literal",
+                        "src": "1705:23:2",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_stringliteral_888f5a8ec05a855860b4e162d8c5d368e8de1a05c1776a00c1dddffbdfc0a736",
+                          "typeString": "literal_string \"Report does not exist\""
+                        },
+                        "value": "Report does not exist"
+                      }
+                    ],
+                    "expression": {
+                      "argumentTypes": [
+                        {
+                          "typeIdentifier": "t_bool",
+                          "typeString": "bool"
+                        },
+                        {
+                          "typeIdentifier": "t_stringliteral_888f5a8ec05a855860b4e162d8c5d368e8de1a05c1776a00c1dddffbdfc0a736",
+                          "typeString": "literal_string \"Report does not exist\""
+                        }
+                      ],
+                      "id": 536,
+                      "name": "require",
+                      "nodeType": "Identifier",
+                      "overloadedDeclarations": [
+                        4294967278,
+                        4294967278
+                      ],
+                      "referencedDeclaration": 4294967278,
+                      "src": "1681:7:2",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_function_require_pure$_t_bool_$_t_string_memory_ptr_$returns$__$",
+                        "typeString": "function (bool,string memory) pure"
+                      }
+                    },
+                    "id": 542,
+                    "isConstant": false,
+                    "isLValue": false,
+                    "isPure": false,
+                    "kind": "functionCall",
+                    "lValueRequested": false,
+                    "nameLocations": [],
+                    "names": [],
+                    "nodeType": "FunctionCall",
+                    "src": "1681:48:2",
+                    "tryCall": false,
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_tuple$__$",
+                      "typeString": "tuple()"
+                    }
+                  },
+                  "id": 543,
+                  "nodeType": "ExpressionStatement",
+                  "src": "1681:48:2"
+                },
+                {
+                  "expression": {
+                    "id": 548,
+                    "isConstant": false,
+                    "isLValue": false,
+                    "isPure": false,
+                    "lValueRequested": false,
+                    "leftHandSide": {
+                      "expression": {
+                        "id": 544,
+                        "name": "report",
+                        "nodeType": "Identifier",
+                        "overloadedDeclarations": [],
+                        "referencedDeclaration": 531,
+                        "src": "1791:6:2",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_struct$_Report_$470_storage_ptr",
+                          "typeString": "struct Municipality.Report storage pointer"
+                        }
+                      },
+                      "id": 546,
+                      "isConstant": false,
+                      "isLValue": true,
+                      "isPure": false,
+                      "lValueRequested": true,
+                      "memberLocation": "1798:5:2",
+                      "memberName": "state",
+                      "nodeType": "MemberAccess",
+                      "referencedDeclaration": 467,
+                      "src": "1791:12:2",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_enum$_HoleState_$453",
+                        "typeString": "enum Municipality.HoleState"
+                      }
+                    },
+                    "nodeType": "Assignment",
+                    "operator": "=",
+                    "rightHandSide": {
+                      "id": 547,
+                      "name": "newState",
+                      "nodeType": "Identifier",
+                      "overloadedDeclarations": [],
+                      "referencedDeclaration": 526,
+                      "src": "1806:8:2",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_enum$_HoleState_$453",
+                        "typeString": "enum Municipality.HoleState"
+                      }
+                    },
+                    "src": "1791:23:2",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_enum$_HoleState_$453",
+                      "typeString": "enum Municipality.HoleState"
+                    }
+                  },
+                  "id": 549,
+                  "nodeType": "ExpressionStatement",
+                  "src": "1791:23:2"
+                },
+                {
+                  "expression": {
+                    "id": 555,
+                    "isConstant": false,
+                    "isLValue": false,
+                    "isPure": false,
+                    "lValueRequested": false,
+                    "leftHandSide": {
+                      "expression": {
+                        "id": 550,
+                        "name": "report",
+                        "nodeType": "Identifier",
+                        "overloadedDeclarations": [],
+                        "referencedDeclaration": 531,
+                        "src": "1824:6:2",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_struct$_Report_$470_storage_ptr",
+                          "typeString": "struct Municipality.Report storage pointer"
+                        }
+                      },
+                      "id": 552,
+                      "isConstant": false,
+                      "isLValue": true,
+                      "isPure": false,
+                      "lValueRequested": true,
+                      "memberLocation": "1831:14:2",
+                      "memberName": "stateTimestamp",
+                      "nodeType": "MemberAccess",
+                      "referencedDeclaration": 469,
+                      "src": "1824:21:2",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_uint256",
+                        "typeString": "uint256"
+                      }
+                    },
+                    "nodeType": "Assignment",
+                    "operator": "=",
+                    "rightHandSide": {
+                      "expression": {
+                        "id": 553,
+                        "name": "block",
+                        "nodeType": "Identifier",
+                        "overloadedDeclarations": [],
+                        "referencedDeclaration": 4294967292,
+                        "src": "1848:5:2",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_magic_block",
+                          "typeString": "block"
+                        }
+                      },
+                      "id": 554,
+                      "isConstant": false,
+                      "isLValue": false,
+                      "isPure": false,
+                      "lValueRequested": false,
+                      "memberLocation": "1854:9:2",
+                      "memberName": "timestamp",
+                      "nodeType": "MemberAccess",
+                      "src": "1848:15:2",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_uint256",
+                        "typeString": "uint256"
+                      }
+                    },
+                    "src": "1824:39:2",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_uint256",
+                      "typeString": "uint256"
+                    }
+                  },
+                  "id": 556,
+                  "nodeType": "ExpressionStatement",
+                  "src": "1824:39:2"
+                },
+                {
+                  "eventCall": {
+                    "arguments": [
+                      {
+                        "id": 558,
+                        "name": "reportId",
+                        "nodeType": "Identifier",
+                        "overloadedDeclarations": [],
+                        "referencedDeclaration": 523,
+                        "src": "1904:8:2",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_uint256",
+                          "typeString": "uint256"
+                        }
+                      },
+                      {
+                        "id": 559,
+                        "name": "newState",
+                        "nodeType": "Identifier",
+                        "overloadedDeclarations": [],
+                        "referencedDeclaration": 526,
+                        "src": "1914:8:2",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_enum$_HoleState_$453",
+                          "typeString": "enum Municipality.HoleState"
+                        }
+                      },
+                      {
+                        "expression": {
+                          "id": 560,
+                          "name": "block",
+                          "nodeType": "Identifier",
+                          "overloadedDeclarations": [],
+                          "referencedDeclaration": 4294967292,
+                          "src": "1924:5:2",
+                          "typeDescriptions": {
+                            "typeIdentifier": "t_magic_block",
+                            "typeString": "block"
+                          }
+                        },
+                        "id": 561,
+                        "isConstant": false,
+                        "isLValue": false,
+                        "isPure": false,
+                        "lValueRequested": false,
+                        "memberLocation": "1930:9:2",
+                        "memberName": "timestamp",
+                        "nodeType": "MemberAccess",
+                        "src": "1924:15:2",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_uint256",
+                          "typeString": "uint256"
+                        }
+                      }
+                    ],
+                    "expression": {
+                      "argumentTypes": [
+                        {
+                          "typeIdentifier": "t_uint256",
+                          "typeString": "uint256"
+                        },
+                        {
+                          "typeIdentifier": "t_enum$_HoleState_$453",
+                          "typeString": "enum Municipality.HoleState"
+                        },
+                        {
+                          "typeIdentifier": "t_uint256",
+                          "typeString": "uint256"
+                        }
+                      ],
+                      "id": 557,
+                      "name": "HoleStateChanged",
+                      "nodeType": "Identifier",
+                      "overloadedDeclarations": [],
+                      "referencedDeclaration": 501,
+                      "src": "1887:16:2",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_function_event_nonpayable$_t_uint256_$_t_enum$_HoleState_$453_$_t_uint256_$returns$__$",
+                        "typeString": "function (uint256,enum Municipality.HoleState,uint256)"
+                      }
+                    },
+                    "id": 562,
+                    "isConstant": false,
+                    "isLValue": false,
+                    "isPure": false,
+                    "kind": "functionCall",
+                    "lValueRequested": false,
+                    "nameLocations": [],
+                    "names": [],
+                    "nodeType": "FunctionCall",
+                    "src": "1887:53:2",
+                    "tryCall": false,
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_tuple$__$",
+                      "typeString": "tuple()"
+                    }
+                  },
+                  "id": 563,
+                  "nodeType": "EmitStatement",
+                  "src": "1882:58:2"
+                }
+              ]
+            },
+            "functionSelector": "1e4f5d8b",
+            "id": 565,
+            "implemented": true,
+            "kind": "function",
+            "modifiers": [],
+            "name": "updateHoleState",
+            "nameLocation": "1514:15:2",
+            "nodeType": "FunctionDefinition",
+            "parameters": {
+              "id": 527,
+              "nodeType": "ParameterList",
+              "parameters": [
+                {
+                  "constant": false,
+                  "id": 523,
+                  "mutability": "mutable",
+                  "name": "reportId",
+                  "nameLocation": "1538:8:2",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 565,
+                  "src": "1530:16:2",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_uint256",
+                    "typeString": "uint256"
+                  },
+                  "typeName": {
+                    "id": 522,
+                    "name": "uint256",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "1530:7:2",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_uint256",
+                      "typeString": "uint256"
+                    }
+                  },
+                  "visibility": "internal"
+                },
+                {
+                  "constant": false,
+                  "id": 526,
+                  "mutability": "mutable",
+                  "name": "newState",
+                  "nameLocation": "1558:8:2",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 565,
+                  "src": "1548:18:2",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_enum$_HoleState_$453",
+                    "typeString": "enum Municipality.HoleState"
+                  },
+                  "typeName": {
+                    "id": 525,
+                    "nodeType": "UserDefinedTypeName",
+                    "pathNode": {
+                      "id": 524,
+                      "name": "HoleState",
+                      "nameLocations": [
+                        "1548:9:2"
+                      ],
+                      "nodeType": "IdentifierPath",
+                      "referencedDeclaration": 453,
+                      "src": "1548:9:2"
+                    },
+                    "referencedDeclaration": 453,
+                    "src": "1548:9:2",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_enum$_HoleState_$453",
+                      "typeString": "enum Municipality.HoleState"
+                    }
+                  },
+                  "visibility": "internal"
+                }
+              ],
+              "src": "1529:38:2"
+            },
+            "returnParameters": {
+              "id": 528,
+              "nodeType": "ParameterList",
+              "parameters": [],
+              "src": "1575:0:2"
+            },
+            "scope": 733,
+            "src": "1505:442:2",
+            "stateMutability": "nonpayable",
+            "virtual": false,
+            "visibility": "public"
+          },
+          {
+            "body": {
+              "id": 617,
+              "nodeType": "Block",
+              "src": "2101:516:2",
+              "statements": [
+                {
+                  "expression": {
+                    "id": 575,
+                    "isConstant": false,
+                    "isLValue": false,
+                    "isPure": false,
+                    "lValueRequested": false,
+                    "nodeType": "UnaryOperation",
+                    "operator": "++",
+                    "prefix": false,
+                    "src": "2111:13:2",
+                    "subExpression": {
+                      "id": 574,
+                      "name": "reportCount",
+                      "nodeType": "Identifier",
+                      "overloadedDeclarations": [],
+                      "referencedDeclaration": 472,
+                      "src": "2111:11:2",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_uint256",
+                        "typeString": "uint256"
+                      }
+                    },
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_uint256",
+                      "typeString": "uint256"
+                    }
+                  },
+                  "id": 576,
+                  "nodeType": "ExpressionStatement",
+                  "src": "2111:13:2"
+                },
+                {
+                  "expression": {
+                    "id": 591,
+                    "isConstant": false,
+                    "isLValue": false,
+                    "isPure": false,
+                    "lValueRequested": false,
+                    "leftHandSide": {
+                      "baseExpression": {
+                        "id": 577,
+                        "name": "reports",
+                        "nodeType": "Identifier",
+                        "overloadedDeclarations": [],
+                        "referencedDeclaration": 477,
+                        "src": "2134:7:2",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_mapping$_t_uint256_$_t_struct$_Report_$470_storage_$",
+                          "typeString": "mapping(uint256 => struct Municipality.Report storage ref)"
+                        }
+                      },
+                      "id": 579,
+                      "indexExpression": {
+                        "id": 578,
+                        "name": "reportCount",
+                        "nodeType": "Identifier",
+                        "overloadedDeclarations": [],
+                        "referencedDeclaration": 472,
+                        "src": "2142:11:2",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_uint256",
+                          "typeString": "uint256"
+                        }
+                      },
+                      "isConstant": false,
+                      "isLValue": true,
+                      "isPure": false,
+                      "lValueRequested": true,
+                      "nodeType": "IndexAccess",
+                      "src": "2134:20:2",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_struct$_Report_$470_storage",
+                        "typeString": "struct Municipality.Report storage ref"
+                      }
+                    },
+                    "nodeType": "Assignment",
+                    "operator": "=",
+                    "rightHandSide": {
+                      "arguments": [
+                        {
+                          "id": 581,
+                          "name": "reportCount",
+                          "nodeType": "Identifier",
+                          "overloadedDeclarations": [],
+                          "referencedDeclaration": 472,
+                          "src": "2164:11:2",
+                          "typeDescriptions": {
+                            "typeIdentifier": "t_uint256",
+                            "typeString": "uint256"
+                          }
+                        },
+                        {
+                          "id": 582,
+                          "name": "location",
+                          "nodeType": "Identifier",
+                          "overloadedDeclarations": [],
+                          "referencedDeclaration": 569,
+                          "src": "2177:8:2",
+                          "typeDescriptions": {
+                            "typeIdentifier": "t_string_memory_ptr",
+                            "typeString": "string memory"
+                          }
+                        },
+                        {
+                          "expression": {
+                            "id": 583,
+                            "name": "block",
+                            "nodeType": "Identifier",
+                            "overloadedDeclarations": [],
+                            "referencedDeclaration": 4294967292,
+                            "src": "2187:5:2",
+                            "typeDescriptions": {
+                              "typeIdentifier": "t_magic_block",
+                              "typeString": "block"
+                            }
+                          },
+                          "id": 584,
+                          "isConstant": false,
+                          "isLValue": false,
+                          "isPure": false,
+                          "lValueRequested": false,
+                          "memberLocation": "2193:9:2",
+                          "memberName": "timestamp",
+                          "nodeType": "MemberAccess",
+                          "src": "2187:15:2",
+                          "typeDescriptions": {
+                            "typeIdentifier": "t_uint256",
+                            "typeString": "uint256"
+                          }
+                        },
+                        {
+                          "id": 585,
+                          "name": "reporter",
+                          "nodeType": "Identifier",
+                          "overloadedDeclarations": [],
+                          "referencedDeclaration": 571,
+                          "src": "2204:8:2",
+                          "typeDescriptions": {
+                            "typeIdentifier": "t_address",
+                            "typeString": "address"
+                          }
+                        },
+                        {
+                          "expression": {
+                            "id": 586,
+                            "name": "HoleState",
+                            "nodeType": "Identifier",
+                            "overloadedDeclarations": [],
+                            "referencedDeclaration": 453,
+                            "src": "2214:9:2",
+                            "typeDescriptions": {
+                              "typeIdentifier": "t_type$_t_enum$_HoleState_$453_$",
+                              "typeString": "type(enum Municipality.HoleState)"
+                            }
+                          },
+                          "id": 587,
+                          "isConstant": false,
+                          "isLValue": false,
+                          "isPure": true,
+                          "lValueRequested": false,
+                          "memberLocation": "2224:7:2",
+                          "memberName": "Pending",
+                          "nodeType": "MemberAccess",
+                          "referencedDeclaration": 450,
+                          "src": "2214:17:2",
+                          "typeDescriptions": {
+                            "typeIdentifier": "t_enum$_HoleState_$453",
+                            "typeString": "enum Municipality.HoleState"
+                          }
+                        },
+                        {
+                          "expression": {
+                            "id": 588,
+                            "name": "block",
+                            "nodeType": "Identifier",
+                            "overloadedDeclarations": [],
+                            "referencedDeclaration": 4294967292,
+                            "src": "2233:5:2",
+                            "typeDescriptions": {
+                              "typeIdentifier": "t_magic_block",
+                              "typeString": "block"
+                            }
+                          },
+                          "id": 589,
+                          "isConstant": false,
+                          "isLValue": false,
+                          "isPure": false,
+                          "lValueRequested": false,
+                          "memberLocation": "2239:9:2",
+                          "memberName": "timestamp",
+                          "nodeType": "MemberAccess",
+                          "src": "2233:15:2",
+                          "typeDescriptions": {
+                            "typeIdentifier": "t_uint256",
+                            "typeString": "uint256"
+                          }
+                        }
+                      ],
+                      "expression": {
+                        "argumentTypes": [
+                          {
+                            "typeIdentifier": "t_uint256",
+                            "typeString": "uint256"
+                          },
+                          {
+                            "typeIdentifier": "t_string_memory_ptr",
+                            "typeString": "string memory"
+                          },
+                          {
+                            "typeIdentifier": "t_uint256",
+                            "typeString": "uint256"
+                          },
+                          {
+                            "typeIdentifier": "t_address",
+                            "typeString": "address"
+                          },
+                          {
+                            "typeIdentifier": "t_enum$_HoleState_$453",
+                            "typeString": "enum Municipality.HoleState"
+                          },
+                          {
+                            "typeIdentifier": "t_uint256",
+                            "typeString": "uint256"
+                          }
+                        ],
+                        "id": 580,
+                        "name": "Report",
+                        "nodeType": "Identifier",
+                        "overloadedDeclarations": [],
+                        "referencedDeclaration": 470,
+                        "src": "2157:6:2",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_type$_t_struct$_Report_$470_storage_ptr_$",
+                          "typeString": "type(struct Municipality.Report storage pointer)"
+                        }
+                      },
+                      "id": 590,
+                      "isConstant": false,
+                      "isLValue": false,
+                      "isPure": false,
+                      "kind": "structConstructorCall",
+                      "lValueRequested": false,
+                      "nameLocations": [],
+                      "names": [],
+                      "nodeType": "FunctionCall",
+                      "src": "2157:92:2",
+                      "tryCall": false,
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_struct$_Report_$470_memory_ptr",
+                        "typeString": "struct Municipality.Report memory"
+                      }
+                    },
+                    "src": "2134:115:2",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_struct$_Report_$470_storage",
+                      "typeString": "struct Municipality.Report storage ref"
+                    }
+                  },
+                  "id": 592,
+                  "nodeType": "ExpressionStatement",
+                  "src": "2134:115:2"
+                },
+                {
+                  "expression": {
+                    "arguments": [
+                      {
+                        "commonType": {
+                          "typeIdentifier": "t_uint256",
+                          "typeString": "uint256"
+                        },
+                        "id": 599,
+                        "isConstant": false,
+                        "isLValue": false,
+                        "isPure": false,
+                        "lValueRequested": false,
+                        "leftExpression": {
+                          "expression": {
+                            "baseExpression": {
+                              "id": 594,
+                              "name": "reports",
+                              "nodeType": "Identifier",
+                              "overloadedDeclarations": [],
+                              "referencedDeclaration": 477,
+                              "src": "2334:7:2",
+                              "typeDescriptions": {
+                                "typeIdentifier": "t_mapping$_t_uint256_$_t_struct$_Report_$470_storage_$",
+                                "typeString": "mapping(uint256 => struct Municipality.Report storage ref)"
+                              }
+                            },
+                            "id": 596,
+                            "indexExpression": {
+                              "id": 595,
+                              "name": "reportCount",
+                              "nodeType": "Identifier",
+                              "overloadedDeclarations": [],
+                              "referencedDeclaration": 472,
+                              "src": "2342:11:2",
+                              "typeDescriptions": {
+                                "typeIdentifier": "t_uint256",
+                                "typeString": "uint256"
+                              }
+                            },
+                            "isConstant": false,
+                            "isLValue": true,
+                            "isPure": false,
+                            "lValueRequested": false,
+                            "nodeType": "IndexAccess",
+                            "src": "2334:20:2",
+                            "typeDescriptions": {
+                              "typeIdentifier": "t_struct$_Report_$470_storage",
+                              "typeString": "struct Municipality.Report storage ref"
+                            }
+                          },
+                          "id": 597,
+                          "isConstant": false,
+                          "isLValue": true,
+                          "isPure": false,
+                          "lValueRequested": false,
+                          "memberLocation": "2355:2:2",
+                          "memberName": "id",
+                          "nodeType": "MemberAccess",
+                          "referencedDeclaration": 458,
+                          "src": "2334:23:2",
+                          "typeDescriptions": {
+                            "typeIdentifier": "t_uint256",
+                            "typeString": "uint256"
+                          }
+                        },
+                        "nodeType": "BinaryOperation",
+                        "operator": "==",
+                        "rightExpression": {
+                          "id": 598,
+                          "name": "reportCount",
+                          "nodeType": "Identifier",
+                          "overloadedDeclarations": [],
+                          "referencedDeclaration": 472,
+                          "src": "2361:11:2",
+                          "typeDescriptions": {
+                            "typeIdentifier": "t_uint256",
+                            "typeString": "uint256"
+                          }
+                        },
+                        "src": "2334:38:2",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_bool",
+                          "typeString": "bool"
+                        }
+                      },
+                      {
+                        "hexValue": "5265706f727420776173206e6f742061646465642070726f7065726c79",
+                        "id": 600,
+                        "isConstant": false,
+                        "isLValue": false,
+                        "isPure": true,
+                        "kind": "string",
+                        "lValueRequested": false,
+                        "nodeType": "Literal",
+                        "src": "2374:31:2",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_stringliteral_b99506db363b797e7c94172195244d47bc9a6ed9e3989c64e5d2b3444d168929",
+                          "typeString": "literal_string \"Report was not added properly\""
+                        },
+                        "value": "Report was not added properly"
+                      }
+                    ],
+                    "expression": {
+                      "argumentTypes": [
+                        {
+                          "typeIdentifier": "t_bool",
+                          "typeString": "bool"
+                        },
+                        {
+                          "typeIdentifier": "t_stringliteral_b99506db363b797e7c94172195244d47bc9a6ed9e3989c64e5d2b3444d168929",
+                          "typeString": "literal_string \"Report was not added properly\""
+                        }
+                      ],
+                      "id": 593,
+                      "name": "require",
+                      "nodeType": "Identifier",
+                      "overloadedDeclarations": [
+                        4294967278,
+                        4294967278
+                      ],
+                      "referencedDeclaration": 4294967278,
+                      "src": "2326:7:2",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_function_require_pure$_t_bool_$_t_string_memory_ptr_$returns$__$",
+                        "typeString": "function (bool,string memory) pure"
+                      }
+                    },
+                    "id": 601,
+                    "isConstant": false,
+                    "isLValue": false,
+                    "isPure": false,
+                    "kind": "functionCall",
+                    "lValueRequested": false,
+                    "nameLocations": [],
+                    "names": [],
+                    "nodeType": "FunctionCall",
+                    "src": "2326:80:2",
+                    "tryCall": false,
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_tuple$__$",
+                      "typeString": "tuple()"
+                    }
+                  },
+                  "id": 602,
+                  "nodeType": "ExpressionStatement",
+                  "src": "2326:80:2"
+                },
+                {
+                  "eventCall": {
+                    "arguments": [
+                      {
+                        "id": 604,
+                        "name": "reportCount",
+                        "nodeType": "Identifier",
+                        "overloadedDeclarations": [],
+                        "referencedDeclaration": 472,
+                        "src": "2498:11:2",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_uint256",
+                          "typeString": "uint256"
+                        }
+                      },
+                      {
+                        "id": 605,
+                        "name": "location",
+                        "nodeType": "Identifier",
+                        "overloadedDeclarations": [],
+                        "referencedDeclaration": 569,
+                        "src": "2511:8:2",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_string_memory_ptr",
+                          "typeString": "string memory"
+                        }
+                      },
+                      {
+                        "id": 606,
+                        "name": "reporter",
+                        "nodeType": "Identifier",
+                        "overloadedDeclarations": [],
+                        "referencedDeclaration": 571,
+                        "src": "2521:8:2",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_address",
+                          "typeString": "address"
+                        }
+                      }
+                    ],
+                    "expression": {
+                      "argumentTypes": [
+                        {
+                          "typeIdentifier": "t_uint256",
+                          "typeString": "uint256"
+                        },
+                        {
+                          "typeIdentifier": "t_string_memory_ptr",
+                          "typeString": "string memory"
+                        },
+                        {
+                          "typeIdentifier": "t_address",
+                          "typeString": "address"
+                        }
+                      ],
+                      "id": 603,
+                      "name": "HoleReported",
+                      "nodeType": "Identifier",
+                      "overloadedDeclarations": [],
+                      "referencedDeclaration": 509,
+                      "src": "2485:12:2",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_function_event_nonpayable$_t_uint256_$_t_string_memory_ptr_$_t_address_$returns$__$",
+                        "typeString": "function (uint256,string memory,address)"
+                      }
+                    },
+                    "id": 607,
+                    "isConstant": false,
+                    "isLValue": false,
+                    "isPure": false,
+                    "kind": "functionCall",
+                    "lValueRequested": false,
+                    "nameLocations": [],
+                    "names": [],
+                    "nodeType": "FunctionCall",
+                    "src": "2485:45:2",
+                    "tryCall": false,
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_tuple$__$",
+                      "typeString": "tuple()"
+                    }
+                  },
+                  "id": 608,
+                  "nodeType": "EmitStatement",
+                  "src": "2480:50:2"
+                },
+                {
+                  "eventCall": {
+                    "arguments": [
+                      {
+                        "id": 610,
+                        "name": "reportCount",
+                        "nodeType": "Identifier",
+                        "overloadedDeclarations": [],
+                        "referencedDeclaration": 472,
+                        "src": "2562:11:2",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_uint256",
+                          "typeString": "uint256"
+                        }
+                      },
+                      {
+                        "expression": {
+                          "id": 611,
+                          "name": "HoleState",
+                          "nodeType": "Identifier",
+                          "overloadedDeclarations": [],
+                          "referencedDeclaration": 453,
+                          "src": "2575:9:2",
+                          "typeDescriptions": {
+                            "typeIdentifier": "t_type$_t_enum$_HoleState_$453_$",
+                            "typeString": "type(enum Municipality.HoleState)"
+                          }
+                        },
+                        "id": 612,
+                        "isConstant": false,
+                        "isLValue": false,
+                        "isPure": true,
+                        "lValueRequested": false,
+                        "memberLocation": "2585:7:2",
+                        "memberName": "Pending",
+                        "nodeType": "MemberAccess",
+                        "referencedDeclaration": 450,
+                        "src": "2575:17:2",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_enum$_HoleState_$453",
+                          "typeString": "enum Municipality.HoleState"
+                        }
+                      },
+                      {
+                        "expression": {
+                          "id": 613,
+                          "name": "block",
+                          "nodeType": "Identifier",
+                          "overloadedDeclarations": [],
+                          "referencedDeclaration": 4294967292,
+                          "src": "2594:5:2",
+                          "typeDescriptions": {
+                            "typeIdentifier": "t_magic_block",
+                            "typeString": "block"
+                          }
+                        },
+                        "id": 614,
+                        "isConstant": false,
+                        "isLValue": false,
+                        "isPure": false,
+                        "lValueRequested": false,
+                        "memberLocation": "2600:9:2",
+                        "memberName": "timestamp",
+                        "nodeType": "MemberAccess",
+                        "src": "2594:15:2",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_uint256",
+                          "typeString": "uint256"
+                        }
+                      }
+                    ],
+                    "expression": {
+                      "argumentTypes": [
+                        {
+                          "typeIdentifier": "t_uint256",
+                          "typeString": "uint256"
+                        },
+                        {
+                          "typeIdentifier": "t_enum$_HoleState_$453",
+                          "typeString": "enum Municipality.HoleState"
+                        },
+                        {
+                          "typeIdentifier": "t_uint256",
+                          "typeString": "uint256"
+                        }
+                      ],
+                      "id": 609,
+                      "name": "HoleStateChanged",
+                      "nodeType": "Identifier",
+                      "overloadedDeclarations": [],
+                      "referencedDeclaration": 501,
+                      "src": "2545:16:2",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_function_event_nonpayable$_t_uint256_$_t_enum$_HoleState_$453_$_t_uint256_$returns$__$",
+                        "typeString": "function (uint256,enum Municipality.HoleState,uint256)"
+                      }
+                    },
+                    "id": 615,
+                    "isConstant": false,
+                    "isLValue": false,
+                    "isPure": false,
+                    "kind": "functionCall",
+                    "lValueRequested": false,
+                    "nameLocations": [],
+                    "names": [],
+                    "nodeType": "FunctionCall",
+                    "src": "2545:65:2",
+                    "tryCall": false,
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_tuple$__$",
+                      "typeString": "tuple()"
+                    }
+                  },
+                  "id": 616,
+                  "nodeType": "EmitStatement",
+                  "src": "2540:70:2"
+                }
+              ]
+            },
+            "functionSelector": "e261dfd6",
+            "id": 618,
+            "implemented": true,
+            "kind": "function",
+            "modifiers": [],
+            "name": "createReport",
+            "nameLocation": "2027:12:2",
+            "nodeType": "FunctionDefinition",
+            "parameters": {
+              "id": 572,
+              "nodeType": "ParameterList",
+              "parameters": [
+                {
+                  "constant": false,
+                  "id": 567,
+                  "mutability": "mutable",
+                  "name": "id",
+                  "nameLocation": "2048:2:2",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 618,
+                  "src": "2040:10:2",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_uint256",
+                    "typeString": "uint256"
+                  },
+                  "typeName": {
+                    "id": 566,
+                    "name": "uint256",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "2040:7:2",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_uint256",
+                      "typeString": "uint256"
+                    }
+                  },
+                  "visibility": "internal"
+                },
+                {
+                  "constant": false,
+                  "id": 569,
+                  "mutability": "mutable",
+                  "name": "location",
+                  "nameLocation": "2066:8:2",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 618,
+                  "src": "2052:22:2",
+                  "stateVariable": false,
+                  "storageLocation": "memory",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_string_memory_ptr",
+                    "typeString": "string"
+                  },
+                  "typeName": {
+                    "id": 568,
+                    "name": "string",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "2052:6:2",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_string_storage_ptr",
+                      "typeString": "string"
+                    }
+                  },
+                  "visibility": "internal"
+                },
+                {
+                  "constant": false,
+                  "id": 571,
+                  "mutability": "mutable",
+                  "name": "reporter",
+                  "nameLocation": "2084:8:2",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 618,
+                  "src": "2076:16:2",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_address",
+                    "typeString": "address"
+                  },
+                  "typeName": {
+                    "id": 570,
+                    "name": "address",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "2076:7:2",
+                    "stateMutability": "nonpayable",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_address",
+                      "typeString": "address"
+                    }
+                  },
+                  "visibility": "internal"
+                }
+              ],
+              "src": "2039:54:2"
+            },
+            "returnParameters": {
+              "id": 573,
+              "nodeType": "ParameterList",
+              "parameters": [],
+              "src": "2101:0:2"
+            },
+            "scope": 733,
+            "src": "2018:599:2",
+            "stateMutability": "nonpayable",
+            "virtual": false,
+            "visibility": "public"
+          },
+          {
+            "body": {
+              "id": 685,
+              "nodeType": "Block",
+              "src": "2748:601:2",
+              "statements": [
+                {
+                  "assignments": [
+                    626
+                  ],
+                  "declarations": [
+                    {
+                      "constant": false,
+                      "id": 626,
+                      "mutability": "mutable",
+                      "name": "allReports",
+                      "nameLocation": "2783:10:2",
+                      "nodeType": "VariableDeclaration",
+                      "scope": 685,
+                      "src": "2758:35:2",
+                      "stateVariable": false,
+                      "storageLocation": "memory",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_array$_t_struct$_Report_$441_memory_ptr_$dyn_memory_ptr",
+                        "typeString": "struct ICitizen.Report[]"
+                      },
+                      "typeName": {
+                        "baseType": {
+                          "id": 624,
+                          "nodeType": "UserDefinedTypeName",
+                          "pathNode": {
+                            "id": 623,
+                            "name": "ICitizen.Report",
+                            "nameLocations": [
+                              "2758:8:2",
+                              "2767:6:2"
+                            ],
+                            "nodeType": "IdentifierPath",
+                            "referencedDeclaration": 441,
+                            "src": "2758:15:2"
+                          },
+                          "referencedDeclaration": 441,
+                          "src": "2758:15:2",
+                          "typeDescriptions": {
+                            "typeIdentifier": "t_struct$_Report_$441_storage_ptr",
+                            "typeString": "struct ICitizen.Report"
+                          }
+                        },
+                        "id": 625,
+                        "nodeType": "ArrayTypeName",
+                        "src": "2758:17:2",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_array$_t_struct$_Report_$441_storage_$dyn_storage_ptr",
+                          "typeString": "struct ICitizen.Report[]"
+                        }
+                      },
+                      "visibility": "internal"
+                    }
+                  ],
+                  "id": 630,
+                  "initialValue": {
+                    "arguments": [],
+                    "expression": {
+                      "argumentTypes": [],
+                      "expression": {
+                        "id": 627,
+                        "name": "citizenContract",
+                        "nodeType": "Identifier",
+                        "overloadedDeclarations": [],
+                        "referencedDeclaration": 492,
+                        "src": "2796:15:2",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_contract$_ICitizen_$449",
+                          "typeString": "contract ICitizen"
+                        }
+                      },
+                      "id": 628,
+                      "isConstant": false,
+                      "isLValue": false,
+                      "isPure": false,
+                      "lValueRequested": false,
+                      "memberLocation": "2812:13:2",
+                      "memberName": "getAllReports",
+                      "nodeType": "MemberAccess",
+                      "referencedDeclaration": 448,
+                      "src": "2796:29:2",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_function_external_view$__$returns$_t_array$_t_struct$_Report_$441_memory_ptr_$dyn_memory_ptr_$",
+                        "typeString": "function () view external returns (struct ICitizen.Report memory[] memory)"
+                      }
+                    },
+                    "id": 629,
+                    "isConstant": false,
+                    "isLValue": false,
+                    "isPure": false,
+                    "kind": "functionCall",
+                    "lValueRequested": false,
+                    "nameLocations": [],
+                    "names": [],
+                    "nodeType": "FunctionCall",
+                    "src": "2796:31:2",
+                    "tryCall": false,
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_array$_t_struct$_Report_$441_memory_ptr_$dyn_memory_ptr",
+                      "typeString": "struct ICitizen.Report memory[] memory"
+                    }
+                  },
+                  "nodeType": "VariableDeclarationStatement",
+                  "src": "2758:69:2"
+                },
+                {
+                  "body": {
+                    "id": 683,
+                    "nodeType": "Block",
+                    "src": "2933:410:2",
+                    "statements": [
+                      {
+                        "expression": {
+                          "id": 672,
+                          "isConstant": false,
+                          "isLValue": false,
+                          "isPure": false,
+                          "lValueRequested": false,
+                          "leftHandSide": {
+                            "baseExpression": {
+                              "id": 642,
+                              "name": "municipalityReports",
+                              "nodeType": "Identifier",
+                              "overloadedDeclarations": [],
+                              "referencedDeclaration": 486,
+                              "src": "2947:19:2",
+                              "typeDescriptions": {
+                                "typeIdentifier": "t_mapping$_t_uint256_$_t_struct$_Report_$470_storage_$",
+                                "typeString": "mapping(uint256 => struct Municipality.Report storage ref)"
+                              }
+                            },
+                            "id": 647,
+                            "indexExpression": {
+                              "expression": {
+                                "baseExpression": {
+                                  "id": 643,
+                                  "name": "allReports",
+                                  "nodeType": "Identifier",
+                                  "overloadedDeclarations": [],
+                                  "referencedDeclaration": 626,
+                                  "src": "2967:10:2",
+                                  "typeDescriptions": {
+                                    "typeIdentifier": "t_array$_t_struct$_Report_$441_memory_ptr_$dyn_memory_ptr",
+                                    "typeString": "struct ICitizen.Report memory[] memory"
+                                  }
+                                },
+                                "id": 645,
+                                "indexExpression": {
+                                  "id": 644,
+                                  "name": "i",
+                                  "nodeType": "Identifier",
+                                  "overloadedDeclarations": [],
+                                  "referencedDeclaration": 632,
+                                  "src": "2978:1:2",
+                                  "typeDescriptions": {
+                                    "typeIdentifier": "t_uint256",
+                                    "typeString": "uint256"
+                                  }
+                                },
+                                "isConstant": false,
+                                "isLValue": true,
+                                "isPure": false,
+                                "lValueRequested": false,
+                                "nodeType": "IndexAccess",
+                                "src": "2967:13:2",
+                                "typeDescriptions": {
+                                  "typeIdentifier": "t_struct$_Report_$441_memory_ptr",
+                                  "typeString": "struct ICitizen.Report memory"
+                                }
+                              },
+                              "id": 646,
+                              "isConstant": false,
+                              "isLValue": true,
+                              "isPure": false,
+                              "lValueRequested": false,
+                              "memberLocation": "2981:2:2",
+                              "memberName": "id",
+                              "nodeType": "MemberAccess",
+                              "referencedDeclaration": 431,
+                              "src": "2967:16:2",
+                              "typeDescriptions": {
+                                "typeIdentifier": "t_uint256",
+                                "typeString": "uint256"
+                              }
+                            },
+                            "isConstant": false,
+                            "isLValue": true,
+                            "isPure": false,
+                            "lValueRequested": true,
+                            "nodeType": "IndexAccess",
+                            "src": "2947:37:2",
+                            "typeDescriptions": {
+                              "typeIdentifier": "t_struct$_Report_$470_storage",
+                              "typeString": "struct Municipality.Report storage ref"
+                            }
+                          },
+                          "nodeType": "Assignment",
+                          "operator": "=",
+                          "rightHandSide": {
+                            "arguments": [
+                              {
+                                "expression": {
+                                  "baseExpression": {
+                                    "id": 649,
+                                    "name": "allReports",
+                                    "nodeType": "Identifier",
+                                    "overloadedDeclarations": [],
+                                    "referencedDeclaration": 626,
+                                    "src": "3011:10:2",
+                                    "typeDescriptions": {
+                                      "typeIdentifier": "t_array$_t_struct$_Report_$441_memory_ptr_$dyn_memory_ptr",
+                                      "typeString": "struct ICitizen.Report memory[] memory"
+                                    }
+                                  },
+                                  "id": 651,
+                                  "indexExpression": {
+                                    "id": 650,
+                                    "name": "i",
+                                    "nodeType": "Identifier",
+                                    "overloadedDeclarations": [],
+                                    "referencedDeclaration": 632,
+                                    "src": "3022:1:2",
+                                    "typeDescriptions": {
+                                      "typeIdentifier": "t_uint256",
+                                      "typeString": "uint256"
+                                    }
+                                  },
+                                  "isConstant": false,
+                                  "isLValue": true,
+                                  "isPure": false,
+                                  "lValueRequested": false,
+                                  "nodeType": "IndexAccess",
+                                  "src": "3011:13:2",
+                                  "typeDescriptions": {
+                                    "typeIdentifier": "t_struct$_Report_$441_memory_ptr",
+                                    "typeString": "struct ICitizen.Report memory"
+                                  }
+                                },
+                                "id": 652,
+                                "isConstant": false,
+                                "isLValue": true,
+                                "isPure": false,
+                                "lValueRequested": false,
+                                "memberLocation": "3025:2:2",
+                                "memberName": "id",
+                                "nodeType": "MemberAccess",
+                                "referencedDeclaration": 431,
+                                "src": "3011:16:2",
+                                "typeDescriptions": {
+                                  "typeIdentifier": "t_uint256",
+                                  "typeString": "uint256"
+                                }
+                              },
+                              {
+                                "expression": {
+                                  "baseExpression": {
+                                    "id": 653,
+                                    "name": "allReports",
+                                    "nodeType": "Identifier",
+                                    "overloadedDeclarations": [],
+                                    "referencedDeclaration": 626,
+                                    "src": "3045:10:2",
+                                    "typeDescriptions": {
+                                      "typeIdentifier": "t_array$_t_struct$_Report_$441_memory_ptr_$dyn_memory_ptr",
+                                      "typeString": "struct ICitizen.Report memory[] memory"
+                                    }
+                                  },
+                                  "id": 655,
+                                  "indexExpression": {
+                                    "id": 654,
+                                    "name": "i",
+                                    "nodeType": "Identifier",
+                                    "overloadedDeclarations": [],
+                                    "referencedDeclaration": 632,
+                                    "src": "3056:1:2",
+                                    "typeDescriptions": {
+                                      "typeIdentifier": "t_uint256",
+                                      "typeString": "uint256"
+                                    }
+                                  },
+                                  "isConstant": false,
+                                  "isLValue": true,
+                                  "isPure": false,
+                                  "lValueRequested": false,
+                                  "nodeType": "IndexAccess",
+                                  "src": "3045:13:2",
+                                  "typeDescriptions": {
+                                    "typeIdentifier": "t_struct$_Report_$441_memory_ptr",
+                                    "typeString": "struct ICitizen.Report memory"
+                                  }
+                                },
+                                "id": 656,
+                                "isConstant": false,
+                                "isLValue": true,
+                                "isPure": false,
+                                "lValueRequested": false,
+                                "memberLocation": "3059:8:2",
+                                "memberName": "location",
+                                "nodeType": "MemberAccess",
+                                "referencedDeclaration": 433,
+                                "src": "3045:22:2",
+                                "typeDescriptions": {
+                                  "typeIdentifier": "t_string_memory_ptr",
+                                  "typeString": "string memory"
+                                }
+                              },
+                              {
+                                "expression": {
+                                  "baseExpression": {
+                                    "id": 657,
+                                    "name": "allReports",
+                                    "nodeType": "Identifier",
+                                    "overloadedDeclarations": [],
+                                    "referencedDeclaration": 626,
+                                    "src": "3085:10:2",
+                                    "typeDescriptions": {
+                                      "typeIdentifier": "t_array$_t_struct$_Report_$441_memory_ptr_$dyn_memory_ptr",
+                                      "typeString": "struct ICitizen.Report memory[] memory"
+                                    }
+                                  },
+                                  "id": 659,
+                                  "indexExpression": {
+                                    "id": 658,
+                                    "name": "i",
+                                    "nodeType": "Identifier",
+                                    "overloadedDeclarations": [],
+                                    "referencedDeclaration": 632,
+                                    "src": "3096:1:2",
+                                    "typeDescriptions": {
+                                      "typeIdentifier": "t_uint256",
+                                      "typeString": "uint256"
+                                    }
+                                  },
+                                  "isConstant": false,
+                                  "isLValue": true,
+                                  "isPure": false,
+                                  "lValueRequested": false,
+                                  "nodeType": "IndexAccess",
+                                  "src": "3085:13:2",
+                                  "typeDescriptions": {
+                                    "typeIdentifier": "t_struct$_Report_$441_memory_ptr",
+                                    "typeString": "struct ICitizen.Report memory"
+                                  }
+                                },
+                                "id": 660,
+                                "isConstant": false,
+                                "isLValue": true,
+                                "isPure": false,
+                                "lValueRequested": false,
+                                "memberLocation": "3099:9:2",
+                                "memberName": "timestamp",
+                                "nodeType": "MemberAccess",
+                                "referencedDeclaration": 435,
+                                "src": "3085:23:2",
+                                "typeDescriptions": {
+                                  "typeIdentifier": "t_uint256",
+                                  "typeString": "uint256"
+                                }
+                              },
+                              {
+                                "expression": {
+                                  "baseExpression": {
+                                    "id": 661,
+                                    "name": "allReports",
+                                    "nodeType": "Identifier",
+                                    "overloadedDeclarations": [],
+                                    "referencedDeclaration": 626,
+                                    "src": "3126:10:2",
+                                    "typeDescriptions": {
+                                      "typeIdentifier": "t_array$_t_struct$_Report_$441_memory_ptr_$dyn_memory_ptr",
+                                      "typeString": "struct ICitizen.Report memory[] memory"
+                                    }
+                                  },
+                                  "id": 663,
+                                  "indexExpression": {
+                                    "id": 662,
+                                    "name": "i",
+                                    "nodeType": "Identifier",
+                                    "overloadedDeclarations": [],
+                                    "referencedDeclaration": 632,
+                                    "src": "3137:1:2",
+                                    "typeDescriptions": {
+                                      "typeIdentifier": "t_uint256",
+                                      "typeString": "uint256"
+                                    }
+                                  },
+                                  "isConstant": false,
+                                  "isLValue": true,
+                                  "isPure": false,
+                                  "lValueRequested": false,
+                                  "nodeType": "IndexAccess",
+                                  "src": "3126:13:2",
+                                  "typeDescriptions": {
+                                    "typeIdentifier": "t_struct$_Report_$441_memory_ptr",
+                                    "typeString": "struct ICitizen.Report memory"
+                                  }
+                                },
+                                "id": 664,
+                                "isConstant": false,
+                                "isLValue": true,
+                                "isPure": false,
+                                "lValueRequested": false,
+                                "memberLocation": "3140:8:2",
+                                "memberName": "reporter",
+                                "nodeType": "MemberAccess",
+                                "referencedDeclaration": 437,
+                                "src": "3126:22:2",
+                                "typeDescriptions": {
+                                  "typeIdentifier": "t_address",
+                                  "typeString": "address"
+                                }
+                              },
+                              {
+                                "expression": {
+                                  "baseExpression": {
+                                    "id": 665,
+                                    "name": "allReports",
+                                    "nodeType": "Identifier",
+                                    "overloadedDeclarations": [],
+                                    "referencedDeclaration": 626,
+                                    "src": "3166:10:2",
+                                    "typeDescriptions": {
+                                      "typeIdentifier": "t_array$_t_struct$_Report_$441_memory_ptr_$dyn_memory_ptr",
+                                      "typeString": "struct ICitizen.Report memory[] memory"
+                                    }
+                                  },
+                                  "id": 667,
+                                  "indexExpression": {
+                                    "id": 666,
+                                    "name": "i",
+                                    "nodeType": "Identifier",
+                                    "overloadedDeclarations": [],
+                                    "referencedDeclaration": 632,
+                                    "src": "3177:1:2",
+                                    "typeDescriptions": {
+                                      "typeIdentifier": "t_uint256",
+                                      "typeString": "uint256"
+                                    }
+                                  },
+                                  "isConstant": false,
+                                  "isLValue": true,
+                                  "isPure": false,
+                                  "lValueRequested": false,
+                                  "nodeType": "IndexAccess",
+                                  "src": "3166:13:2",
+                                  "typeDescriptions": {
+                                    "typeIdentifier": "t_struct$_Report_$441_memory_ptr",
+                                    "typeString": "struct ICitizen.Report memory"
+                                  }
+                                },
+                                "id": 668,
+                                "isConstant": false,
+                                "isLValue": true,
+                                "isPure": false,
+                                "lValueRequested": false,
+                                "memberLocation": "3180:5:2",
+                                "memberName": "state",
+                                "nodeType": "MemberAccess",
+                                "referencedDeclaration": 440,
+                                "src": "3166:19:2",
+                                "typeDescriptions": {
+                                  "typeIdentifier": "t_enum$_HoleState_$453",
+                                  "typeString": "enum Municipality.HoleState"
+                                }
+                              },
+                              {
+                                "expression": {
+                                  "id": 669,
+                                  "name": "block",
+                                  "nodeType": "Identifier",
+                                  "overloadedDeclarations": [],
+                                  "referencedDeclaration": 4294967292,
+                                  "src": "3203:5:2",
+                                  "typeDescriptions": {
+                                    "typeIdentifier": "t_magic_block",
+                                    "typeString": "block"
+                                  }
+                                },
+                                "id": 670,
+                                "isConstant": false,
+                                "isLValue": false,
+                                "isPure": false,
+                                "lValueRequested": false,
+                                "memberLocation": "3209:9:2",
+                                "memberName": "timestamp",
+                                "nodeType": "MemberAccess",
+                                "src": "3203:15:2",
+                                "typeDescriptions": {
+                                  "typeIdentifier": "t_uint256",
+                                  "typeString": "uint256"
+                                }
+                              }
+                            ],
+                            "expression": {
+                              "argumentTypes": [
+                                {
+                                  "typeIdentifier": "t_uint256",
+                                  "typeString": "uint256"
+                                },
+                                {
+                                  "typeIdentifier": "t_string_memory_ptr",
+                                  "typeString": "string memory"
+                                },
+                                {
+                                  "typeIdentifier": "t_uint256",
+                                  "typeString": "uint256"
+                                },
+                                {
+                                  "typeIdentifier": "t_address",
+                                  "typeString": "address"
+                                },
+                                {
+                                  "typeIdentifier": "t_enum$_HoleState_$453",
+                                  "typeString": "enum Municipality.HoleState"
+                                },
+                                {
+                                  "typeIdentifier": "t_uint256",
+                                  "typeString": "uint256"
+                                }
+                              ],
+                              "id": 648,
+                              "name": "Report",
+                              "nodeType": "Identifier",
+                              "overloadedDeclarations": [],
+                              "referencedDeclaration": 470,
+                              "src": "2987:6:2",
+                              "typeDescriptions": {
+                                "typeIdentifier": "t_type$_t_struct$_Report_$470_storage_ptr_$",
+                                "typeString": "type(struct Municipality.Report storage pointer)"
+                              }
+                            },
+                            "id": 671,
+                            "isConstant": false,
+                            "isLValue": false,
+                            "isPure": false,
+                            "kind": "structConstructorCall",
+                            "lValueRequested": false,
+                            "nameLocations": [],
+                            "names": [],
+                            "nodeType": "FunctionCall",
+                            "src": "2987:287:2",
+                            "tryCall": false,
+                            "typeDescriptions": {
+                              "typeIdentifier": "t_struct$_Report_$470_memory_ptr",
+                              "typeString": "struct Municipality.Report memory"
+                            }
+                          },
+                          "src": "2947:327:2",
+                          "typeDescriptions": {
+                            "typeIdentifier": "t_struct$_Report_$470_storage",
+                            "typeString": "struct Municipality.Report storage ref"
+                          }
+                        },
+                        "id": 673,
+                        "nodeType": "ExpressionStatement",
+                        "src": "2947:327:2"
+                      },
+                      {
+                        "expression": {
+                          "arguments": [
+                            {
+                              "expression": {
+                                "baseExpression": {
+                                  "id": 677,
+                                  "name": "allReports",
+                                  "nodeType": "Identifier",
+                                  "overloadedDeclarations": [],
+                                  "referencedDeclaration": 626,
+                                  "src": "3315:10:2",
+                                  "typeDescriptions": {
+                                    "typeIdentifier": "t_array$_t_struct$_Report_$441_memory_ptr_$dyn_memory_ptr",
+                                    "typeString": "struct ICitizen.Report memory[] memory"
+                                  }
+                                },
+                                "id": 679,
+                                "indexExpression": {
+                                  "id": 678,
+                                  "name": "i",
+                                  "nodeType": "Identifier",
+                                  "overloadedDeclarations": [],
+                                  "referencedDeclaration": 632,
+                                  "src": "3326:1:2",
+                                  "typeDescriptions": {
+                                    "typeIdentifier": "t_uint256",
+                                    "typeString": "uint256"
+                                  }
+                                },
+                                "isConstant": false,
+                                "isLValue": true,
+                                "isPure": false,
+                                "lValueRequested": false,
+                                "nodeType": "IndexAccess",
+                                "src": "3315:13:2",
+                                "typeDescriptions": {
+                                  "typeIdentifier": "t_struct$_Report_$441_memory_ptr",
+                                  "typeString": "struct ICitizen.Report memory"
+                                }
+                              },
+                              "id": 680,
+                              "isConstant": false,
+                              "isLValue": true,
+                              "isPure": false,
+                              "lValueRequested": false,
+                              "memberLocation": "3329:2:2",
+                              "memberName": "id",
+                              "nodeType": "MemberAccess",
+                              "referencedDeclaration": 431,
+                              "src": "3315:16:2",
+                              "typeDescriptions": {
+                                "typeIdentifier": "t_uint256",
+                                "typeString": "uint256"
+                              }
+                            }
+                          ],
+                          "expression": {
+                            "argumentTypes": [
+                              {
+                                "typeIdentifier": "t_uint256",
+                                "typeString": "uint256"
+                              }
+                            ],
+                            "expression": {
+                              "id": 674,
+                              "name": "municipalityReportIds",
+                              "nodeType": "Identifier",
+                              "overloadedDeclarations": [],
+                              "referencedDeclaration": 489,
+                              "src": "3288:21:2",
+                              "typeDescriptions": {
+                                "typeIdentifier": "t_array$_t_uint256_$dyn_storage",
+                                "typeString": "uint256[] storage ref"
+                              }
+                            },
+                            "id": 676,
+                            "isConstant": false,
+                            "isLValue": false,
+                            "isPure": false,
+                            "lValueRequested": false,
+                            "memberLocation": "3310:4:2",
+                            "memberName": "push",
+                            "nodeType": "MemberAccess",
+                            "src": "3288:26:2",
+                            "typeDescriptions": {
+                              "typeIdentifier": "t_function_arraypush_nonpayable$_t_array$_t_uint256_$dyn_storage_ptr_$_t_uint256_$returns$__$attached_to$_t_array$_t_uint256_$dyn_storage_ptr_$",
+                              "typeString": "function (uint256[] storage pointer,uint256)"
+                            }
+                          },
+                          "id": 681,
+                          "isConstant": false,
+                          "isLValue": false,
+                          "isPure": false,
+                          "kind": "functionCall",
+                          "lValueRequested": false,
+                          "nameLocations": [],
+                          "names": [],
+                          "nodeType": "FunctionCall",
+                          "src": "3288:44:2",
+                          "tryCall": false,
+                          "typeDescriptions": {
+                            "typeIdentifier": "t_tuple$__$",
+                            "typeString": "tuple()"
+                          }
+                        },
+                        "id": 682,
+                        "nodeType": "ExpressionStatement",
+                        "src": "3288:44:2"
+                      }
+                    ]
+                  },
+                  "condition": {
+                    "commonType": {
+                      "typeIdentifier": "t_uint256",
+                      "typeString": "uint256"
+                    },
+                    "id": 638,
+                    "isConstant": false,
+                    "isLValue": false,
+                    "isPure": false,
+                    "lValueRequested": false,
+                    "leftExpression": {
+                      "id": 635,
+                      "name": "i",
+                      "nodeType": "Identifier",
+                      "overloadedDeclarations": [],
+                      "referencedDeclaration": 632,
+                      "src": "2905:1:2",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_uint256",
+                        "typeString": "uint256"
+                      }
+                    },
+                    "nodeType": "BinaryOperation",
+                    "operator": "<",
+                    "rightExpression": {
+                      "expression": {
+                        "id": 636,
+                        "name": "allReports",
+                        "nodeType": "Identifier",
+                        "overloadedDeclarations": [],
+                        "referencedDeclaration": 626,
+                        "src": "2909:10:2",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_array$_t_struct$_Report_$441_memory_ptr_$dyn_memory_ptr",
+                          "typeString": "struct ICitizen.Report memory[] memory"
+                        }
+                      },
+                      "id": 637,
+                      "isConstant": false,
+                      "isLValue": false,
+                      "isPure": false,
+                      "lValueRequested": false,
+                      "memberLocation": "2920:6:2",
+                      "memberName": "length",
+                      "nodeType": "MemberAccess",
+                      "src": "2909:17:2",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_uint256",
+                        "typeString": "uint256"
+                      }
+                    },
+                    "src": "2905:21:2",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_bool",
+                      "typeString": "bool"
+                    }
+                  },
+                  "id": 684,
+                  "initializationExpression": {
+                    "assignments": [
+                      632
+                    ],
+                    "declarations": [
+                      {
+                        "constant": false,
+                        "id": 632,
+                        "mutability": "mutable",
+                        "name": "i",
+                        "nameLocation": "2898:1:2",
+                        "nodeType": "VariableDeclaration",
+                        "scope": 684,
+                        "src": "2890:9:2",
+                        "stateVariable": false,
+                        "storageLocation": "default",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_uint256",
+                          "typeString": "uint256"
+                        },
+                        "typeName": {
+                          "id": 631,
+                          "name": "uint256",
+                          "nodeType": "ElementaryTypeName",
+                          "src": "2890:7:2",
+                          "typeDescriptions": {
+                            "typeIdentifier": "t_uint256",
+                            "typeString": "uint256"
+                          }
+                        },
+                        "visibility": "internal"
+                      }
+                    ],
+                    "id": 634,
+                    "initialValue": {
+                      "hexValue": "30",
+                      "id": 633,
+                      "isConstant": false,
+                      "isLValue": false,
+                      "isPure": true,
+                      "kind": "number",
+                      "lValueRequested": false,
+                      "nodeType": "Literal",
+                      "src": "2902:1:2",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_rational_0_by_1",
+                        "typeString": "int_const 0"
+                      },
+                      "value": "0"
+                    },
+                    "nodeType": "VariableDeclarationStatement",
+                    "src": "2890:13:2"
+                  },
+                  "loopExpression": {
+                    "expression": {
+                      "id": 640,
+                      "isConstant": false,
+                      "isLValue": false,
+                      "isPure": false,
+                      "lValueRequested": false,
+                      "nodeType": "UnaryOperation",
+                      "operator": "++",
+                      "prefix": false,
+                      "src": "2928:3:2",
+                      "subExpression": {
+                        "id": 639,
+                        "name": "i",
+                        "nodeType": "Identifier",
+                        "overloadedDeclarations": [],
+                        "referencedDeclaration": 632,
+                        "src": "2928:1:2",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_uint256",
+                          "typeString": "uint256"
+                        }
+                      },
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_uint256",
+                        "typeString": "uint256"
+                      }
+                    },
+                    "id": 641,
+                    "nodeType": "ExpressionStatement",
+                    "src": "2928:3:2"
+                  },
+                  "nodeType": "ForStatement",
+                  "src": "2885:458:2"
+                }
+              ]
+            },
+            "functionSelector": "cae1e00b",
+            "id": 686,
+            "implemented": true,
+            "kind": "function",
+            "modifiers": [],
+            "name": "transferReports",
+            "nameLocation": "2723:15:2",
+            "nodeType": "FunctionDefinition",
+            "parameters": {
+              "id": 619,
+              "nodeType": "ParameterList",
+              "parameters": [],
+              "src": "2738:2:2"
+            },
+            "returnParameters": {
+              "id": 620,
+              "nodeType": "ParameterList",
+              "parameters": [],
+              "src": "2748:0:2"
+            },
+            "scope": 733,
+            "src": "2714:635:2",
+            "stateMutability": "nonpayable",
+            "virtual": false,
+            "visibility": "public"
+          },
+          {
+            "body": {
+              "id": 731,
+              "nodeType": "Block",
+              "src": "3501:269:2",
+              "statements": [
+                {
+                  "assignments": [
+                    697
+                  ],
+                  "declarations": [
+                    {
+                      "constant": false,
+                      "id": 697,
+                      "mutability": "mutable",
+                      "name": "allReports",
+                      "nameLocation": "3527:10:2",
+                      "nodeType": "VariableDeclaration",
+                      "scope": 731,
+                      "src": "3511:26:2",
+                      "stateVariable": false,
+                      "storageLocation": "memory",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_array$_t_struct$_Report_$470_memory_ptr_$dyn_memory_ptr",
+                        "typeString": "struct Municipality.Report[]"
+                      },
+                      "typeName": {
+                        "baseType": {
+                          "id": 695,
+                          "nodeType": "UserDefinedTypeName",
+                          "pathNode": {
+                            "id": 694,
+                            "name": "Report",
+                            "nameLocations": [
+                              "3511:6:2"
+                            ],
+                            "nodeType": "IdentifierPath",
+                            "referencedDeclaration": 470,
+                            "src": "3511:6:2"
+                          },
+                          "referencedDeclaration": 470,
+                          "src": "3511:6:2",
+                          "typeDescriptions": {
+                            "typeIdentifier": "t_struct$_Report_$470_storage_ptr",
+                            "typeString": "struct Municipality.Report"
+                          }
+                        },
+                        "id": 696,
+                        "nodeType": "ArrayTypeName",
+                        "src": "3511:8:2",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_array$_t_struct$_Report_$470_storage_$dyn_storage_ptr",
+                          "typeString": "struct Municipality.Report[]"
+                        }
+                      },
+                      "visibility": "internal"
+                    }
+                  ],
+                  "id": 705,
+                  "initialValue": {
+                    "arguments": [
+                      {
+                        "expression": {
+                          "id": 702,
+                          "name": "municipalityReportIds",
+                          "nodeType": "Identifier",
+                          "overloadedDeclarations": [],
+                          "referencedDeclaration": 489,
+                          "src": "3553:21:2",
+                          "typeDescriptions": {
+                            "typeIdentifier": "t_array$_t_uint256_$dyn_storage",
+                            "typeString": "uint256[] storage ref"
+                          }
+                        },
+                        "id": 703,
+                        "isConstant": false,
+                        "isLValue": false,
+                        "isPure": false,
+                        "lValueRequested": false,
+                        "memberLocation": "3575:6:2",
+                        "memberName": "length",
+                        "nodeType": "MemberAccess",
+                        "src": "3553:28:2",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_uint256",
+                          "typeString": "uint256"
+                        }
+                      }
+                    ],
+                    "expression": {
+                      "argumentTypes": [
+                        {
+                          "typeIdentifier": "t_uint256",
+                          "typeString": "uint256"
+                        }
+                      ],
+                      "id": 701,
+                      "isConstant": false,
+                      "isLValue": false,
+                      "isPure": true,
+                      "lValueRequested": false,
+                      "nodeType": "NewExpression",
+                      "src": "3540:12:2",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_function_objectcreation_pure$_t_uint256_$returns$_t_array$_t_struct$_Report_$470_memory_ptr_$dyn_memory_ptr_$",
+                        "typeString": "function (uint256) pure returns (struct Municipality.Report memory[] memory)"
+                      },
+                      "typeName": {
+                        "baseType": {
+                          "id": 699,
+                          "nodeType": "UserDefinedTypeName",
+                          "pathNode": {
+                            "id": 698,
+                            "name": "Report",
+                            "nameLocations": [
+                              "3544:6:2"
+                            ],
+                            "nodeType": "IdentifierPath",
+                            "referencedDeclaration": 470,
+                            "src": "3544:6:2"
+                          },
+                          "referencedDeclaration": 470,
+                          "src": "3544:6:2",
+                          "typeDescriptions": {
+                            "typeIdentifier": "t_struct$_Report_$470_storage_ptr",
+                            "typeString": "struct Municipality.Report"
+                          }
+                        },
+                        "id": 700,
+                        "nodeType": "ArrayTypeName",
+                        "src": "3544:8:2",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_array$_t_struct$_Report_$470_storage_$dyn_storage_ptr",
+                          "typeString": "struct Municipality.Report[]"
+                        }
+                      }
+                    },
+                    "id": 704,
+                    "isConstant": false,
+                    "isLValue": false,
+                    "isPure": false,
+                    "kind": "functionCall",
+                    "lValueRequested": false,
+                    "nameLocations": [],
+                    "names": [],
+                    "nodeType": "FunctionCall",
+                    "src": "3540:42:2",
+                    "tryCall": false,
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_array$_t_struct$_Report_$470_memory_ptr_$dyn_memory_ptr",
+                      "typeString": "struct Municipality.Report memory[] memory"
+                    }
+                  },
+                  "nodeType": "VariableDeclarationStatement",
+                  "src": "3511:71:2"
+                },
+                {
+                  "body": {
+                    "id": 727,
+                    "nodeType": "Block",
+                    "src": "3651:86:2",
+                    "statements": [
+                      {
+                        "expression": {
+                          "id": 725,
+                          "isConstant": false,
+                          "isLValue": false,
+                          "isPure": false,
+                          "lValueRequested": false,
+                          "leftHandSide": {
+                            "baseExpression": {
+                              "id": 717,
+                              "name": "allReports",
+                              "nodeType": "Identifier",
+                              "overloadedDeclarations": [],
+                              "referencedDeclaration": 697,
+                              "src": "3665:10:2",
+                              "typeDescriptions": {
+                                "typeIdentifier": "t_array$_t_struct$_Report_$470_memory_ptr_$dyn_memory_ptr",
+                                "typeString": "struct Municipality.Report memory[] memory"
+                              }
+                            },
+                            "id": 719,
+                            "indexExpression": {
+                              "id": 718,
+                              "name": "i",
+                              "nodeType": "Identifier",
+                              "overloadedDeclarations": [],
+                              "referencedDeclaration": 707,
+                              "src": "3676:1:2",
+                              "typeDescriptions": {
+                                "typeIdentifier": "t_uint256",
+                                "typeString": "uint256"
+                              }
+                            },
+                            "isConstant": false,
+                            "isLValue": true,
+                            "isPure": false,
+                            "lValueRequested": true,
+                            "nodeType": "IndexAccess",
+                            "src": "3665:13:2",
+                            "typeDescriptions": {
+                              "typeIdentifier": "t_struct$_Report_$470_memory_ptr",
+                              "typeString": "struct Municipality.Report memory"
+                            }
+                          },
+                          "nodeType": "Assignment",
+                          "operator": "=",
+                          "rightHandSide": {
+                            "baseExpression": {
+                              "id": 720,
+                              "name": "municipalityReports",
+                              "nodeType": "Identifier",
+                              "overloadedDeclarations": [],
+                              "referencedDeclaration": 486,
+                              "src": "3681:19:2",
+                              "typeDescriptions": {
+                                "typeIdentifier": "t_mapping$_t_uint256_$_t_struct$_Report_$470_storage_$",
+                                "typeString": "mapping(uint256 => struct Municipality.Report storage ref)"
+                              }
+                            },
+                            "id": 724,
+                            "indexExpression": {
+                              "baseExpression": {
+                                "id": 721,
+                                "name": "municipalityReportIds",
+                                "nodeType": "Identifier",
+                                "overloadedDeclarations": [],
+                                "referencedDeclaration": 489,
+                                "src": "3701:21:2",
+                                "typeDescriptions": {
+                                  "typeIdentifier": "t_array$_t_uint256_$dyn_storage",
+                                  "typeString": "uint256[] storage ref"
+                                }
+                              },
+                              "id": 723,
+                              "indexExpression": {
+                                "id": 722,
+                                "name": "i",
+                                "nodeType": "Identifier",
+                                "overloadedDeclarations": [],
+                                "referencedDeclaration": 707,
+                                "src": "3723:1:2",
+                                "typeDescriptions": {
+                                  "typeIdentifier": "t_uint256",
+                                  "typeString": "uint256"
+                                }
+                              },
+                              "isConstant": false,
+                              "isLValue": true,
+                              "isPure": false,
+                              "lValueRequested": false,
+                              "nodeType": "IndexAccess",
+                              "src": "3701:24:2",
+                              "typeDescriptions": {
+                                "typeIdentifier": "t_uint256",
+                                "typeString": "uint256"
+                              }
+                            },
+                            "isConstant": false,
+                            "isLValue": true,
+                            "isPure": false,
+                            "lValueRequested": false,
+                            "nodeType": "IndexAccess",
+                            "src": "3681:45:2",
+                            "typeDescriptions": {
+                              "typeIdentifier": "t_struct$_Report_$470_storage",
+                              "typeString": "struct Municipality.Report storage ref"
+                            }
+                          },
+                          "src": "3665:61:2",
+                          "typeDescriptions": {
+                            "typeIdentifier": "t_struct$_Report_$470_memory_ptr",
+                            "typeString": "struct Municipality.Report memory"
+                          }
+                        },
+                        "id": 726,
+                        "nodeType": "ExpressionStatement",
+                        "src": "3665:61:2"
+                      }
+                    ]
+                  },
+                  "condition": {
+                    "commonType": {
+                      "typeIdentifier": "t_uint256",
+                      "typeString": "uint256"
+                    },
+                    "id": 713,
+                    "isConstant": false,
+                    "isLValue": false,
+                    "isPure": false,
+                    "lValueRequested": false,
+                    "leftExpression": {
+                      "id": 710,
+                      "name": "i",
+                      "nodeType": "Identifier",
+                      "overloadedDeclarations": [],
+                      "referencedDeclaration": 707,
+                      "src": "3612:1:2",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_uint256",
+                        "typeString": "uint256"
+                      }
+                    },
+                    "nodeType": "BinaryOperation",
+                    "operator": "<",
+                    "rightExpression": {
+                      "expression": {
+                        "id": 711,
+                        "name": "municipalityReportIds",
+                        "nodeType": "Identifier",
+                        "overloadedDeclarations": [],
+                        "referencedDeclaration": 489,
+                        "src": "3616:21:2",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_array$_t_uint256_$dyn_storage",
+                          "typeString": "uint256[] storage ref"
+                        }
+                      },
+                      "id": 712,
+                      "isConstant": false,
+                      "isLValue": false,
+                      "isPure": false,
+                      "lValueRequested": false,
+                      "memberLocation": "3638:6:2",
+                      "memberName": "length",
+                      "nodeType": "MemberAccess",
+                      "src": "3616:28:2",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_uint256",
+                        "typeString": "uint256"
+                      }
+                    },
+                    "src": "3612:32:2",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_bool",
+                      "typeString": "bool"
+                    }
+                  },
+                  "id": 728,
+                  "initializationExpression": {
+                    "assignments": [
+                      707
+                    ],
+                    "declarations": [
+                      {
+                        "constant": false,
+                        "id": 707,
+                        "mutability": "mutable",
+                        "name": "i",
+                        "nameLocation": "3605:1:2",
+                        "nodeType": "VariableDeclaration",
+                        "scope": 728,
+                        "src": "3597:9:2",
+                        "stateVariable": false,
+                        "storageLocation": "default",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_uint256",
+                          "typeString": "uint256"
+                        },
+                        "typeName": {
+                          "id": 706,
+                          "name": "uint256",
+                          "nodeType": "ElementaryTypeName",
+                          "src": "3597:7:2",
+                          "typeDescriptions": {
+                            "typeIdentifier": "t_uint256",
+                            "typeString": "uint256"
+                          }
+                        },
+                        "visibility": "internal"
+                      }
+                    ],
+                    "id": 709,
+                    "initialValue": {
+                      "hexValue": "30",
+                      "id": 708,
+                      "isConstant": false,
+                      "isLValue": false,
+                      "isPure": true,
+                      "kind": "number",
+                      "lValueRequested": false,
+                      "nodeType": "Literal",
+                      "src": "3609:1:2",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_rational_0_by_1",
+                        "typeString": "int_const 0"
+                      },
+                      "value": "0"
+                    },
+                    "nodeType": "VariableDeclarationStatement",
+                    "src": "3597:13:2"
+                  },
+                  "loopExpression": {
+                    "expression": {
+                      "id": 715,
+                      "isConstant": false,
+                      "isLValue": false,
+                      "isPure": false,
+                      "lValueRequested": false,
+                      "nodeType": "UnaryOperation",
+                      "operator": "++",
+                      "prefix": false,
+                      "src": "3646:3:2",
+                      "subExpression": {
+                        "id": 714,
+                        "name": "i",
+                        "nodeType": "Identifier",
+                        "overloadedDeclarations": [],
+                        "referencedDeclaration": 707,
+                        "src": "3646:1:2",
+                        "typeDescriptions": {
+                          "typeIdentifier": "t_uint256",
+                          "typeString": "uint256"
+                        }
+                      },
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_uint256",
+                        "typeString": "uint256"
+                      }
+                    },
+                    "id": 716,
+                    "nodeType": "ExpressionStatement",
+                    "src": "3646:3:2"
+                  },
+                  "nodeType": "ForStatement",
+                  "src": "3592:145:2"
+                },
+                {
+                  "expression": {
+                    "id": 729,
+                    "name": "allReports",
+                    "nodeType": "Identifier",
+                    "overloadedDeclarations": [],
+                    "referencedDeclaration": 697,
+                    "src": "3753:10:2",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_array$_t_struct$_Report_$470_memory_ptr_$dyn_memory_ptr",
+                      "typeString": "struct Municipality.Report memory[] memory"
+                    }
+                  },
+                  "functionReturnParameters": 692,
+                  "id": 730,
+                  "nodeType": "Return",
+                  "src": "3746:17:2"
+                }
+              ]
+            },
+            "functionSelector": "05f46ff7",
+            "id": 732,
+            "implemented": true,
+            "kind": "function",
+            "modifiers": [],
+            "name": "getAllMunicipalityReports",
+            "nameLocation": "3435:25:2",
+            "nodeType": "FunctionDefinition",
+            "parameters": {
+              "id": 687,
+              "nodeType": "ParameterList",
+              "parameters": [],
+              "src": "3460:2:2"
+            },
+            "returnParameters": {
+              "id": 692,
+              "nodeType": "ParameterList",
+              "parameters": [
+                {
+                  "constant": false,
+                  "id": 691,
+                  "mutability": "mutable",
+                  "name": "",
+                  "nameLocation": "-1:-1:-1",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 732,
+                  "src": "3484:15:2",
+                  "stateVariable": false,
+                  "storageLocation": "memory",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_array$_t_struct$_Report_$470_memory_ptr_$dyn_memory_ptr",
+                    "typeString": "struct Municipality.Report[]"
+                  },
+                  "typeName": {
+                    "baseType": {
+                      "id": 689,
+                      "nodeType": "UserDefinedTypeName",
+                      "pathNode": {
+                        "id": 688,
+                        "name": "Report",
+                        "nameLocations": [
+                          "3484:6:2"
+                        ],
+                        "nodeType": "IdentifierPath",
+                        "referencedDeclaration": 470,
+                        "src": "3484:6:2"
+                      },
+                      "referencedDeclaration": 470,
+                      "src": "3484:6:2",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_struct$_Report_$470_storage_ptr",
+                        "typeString": "struct Municipality.Report"
+                      }
+                    },
+                    "id": 690,
+                    "nodeType": "ArrayTypeName",
+                    "src": "3484:8:2",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_array$_t_struct$_Report_$470_storage_$dyn_storage_ptr",
+                      "typeString": "struct Municipality.Report[]"
+                    }
+                  },
+                  "visibility": "internal"
+                }
+              ],
+              "src": "3483:17:2"
+            },
+            "scope": 733,
+            "src": "3426:344:2",
+            "stateMutability": "view",
+            "virtual": false,
+            "visibility": "public"
+          }
+        ],
+        "scope": 734,
+        "src": "319:3453:2",
+        "usedErrors": []
+      }
+    ],
+    "src": "32:3741:2"
+  },
+  "compiler": {
+    "name": "solc",
+    "version": "0.8.19+commit.7dd6d404.Emscripten.clang"
+  },
+  "networks": {},
+  "schemaVersion": "3.4.16",
+  "updatedAt": "2024-12-08T15:22:22.317Z",
+  "devdoc": {
+    "kind": "dev",
+    "methods": {},
+    "version": 1
+  },
+  "userdoc": {
+    "kind": "user",
+    "methods": {},
+    "version": 1
+  }
+}

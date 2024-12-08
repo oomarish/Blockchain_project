@@ -12,6 +12,7 @@ npm install web3
 truffle init
 # deployment steps
 truffle compile
+truffle migrate
 # build file will be made
 # update the abi files inside frontend
 node ./copyAbi.js

@@ -51,28 +51,5 @@ contract Municipality {
         emit HoleReported(reportCount, location, reporter); // <-- Ajout ici
         emit HoleStateChanged(reportCount, HoleState.Pending, block.timestamp);
     }
-       // Fonction pour transférer les rapports du contrat citoyen vers le contrat municipalité
-    function transferReports() public {
-        Citizen.Report[] memory allReports = citizenContract.getAllReports();  // Récupérer les rapports du contrat citoyen
-
-        for (uint256 i = 0; i < allReports.length; i++) {
-            municipalityReports[allReports[i].id] = MunicipalityReport(
-                allReports[i].id,
-                allReports[i].location,
-                allReports[i].timestamp,
-                allReports[i].reporter,
-                allReports[i].state
-            );
-            municipalityReportIds.push(allReports[i].id);
-        }
-    }
-
-    // Fonction pour récupérer tous les rapports de la municipalité
-    function getAllMunicipalityReports() public view returns (MunicipalityReport[] memory) {
-        MunicipalityReport[] memory allReports = new MunicipalityReport[](municipalityReportIds.length);
-        for (uint256 i = 0; i < municipalityReportIds.length; i++) {
-            allReports[i] = municipalityReports[municipalityReportIds[i]];
-        }
-        return allReports;
-    }
+     
 }
