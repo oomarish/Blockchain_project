@@ -76,7 +76,9 @@ class CitizenScreen extends StatelessWidget {
                     child: FlutterMap(
                       options: MapOptions(
                         initialCenter: LatLng(
-                            37.7749, -122.4194), // Default to San Francisco
+                            // Sfax Lat: 34.76298928360567, Lng: 10.74052543593526
+                            34.7629,
+                            10.7405), // Default to Sfax
                         initialZoom: 12.0,
                         onTap: (_, LatLng coordinates) {
                           coordinatesController.text =

@@ -1,5 +1,4 @@
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart';
@@ -11,7 +10,7 @@ class MunicipalityContractLinking extends ChangeNotifier {
   final String _rpcUrl = "http://127.0.0.1:7545"; // Ganache RPC URL
   final String _wsUrl = "ws://127.0.0.1:58735/"; // WebSocket URL
   final String _privateKey =
-      "0x0637d35fbeede259a4d9f7aeeda1334c7719916df22b2b6e031cdb54f1f8e7f5"; // Private key for the test account
+      "0x81973971d991152811c87d2616b5b1b39812c86eff262f27af747d97d630571b"; // Private key for the test account
 
   late Web3Client _client;
   late bool isLoading = false;
@@ -23,8 +22,8 @@ class MunicipalityContractLinking extends ChangeNotifier {
 
   late DeployedContract _contract;
   late ContractFunction _updateHoleState;
-  late ContractFunction _createReport;
-  late ContractFunction _getReport;
+  late ContractFunction _getAllReports;
+  late ContractEvent _holeReportedEvent;
 
   String? transactionHash; // Store transaction hash for feedback
 
@@ -34,24 +33,23 @@ class MunicipalityContractLinking extends ChangeNotifier {
     initialSetup();
   }
 
-Future<void> initialSetup() async {
-  _client = Web3Client(_rpcUrl, Client(), socketConnector: () {
-    return IOWebSocketChannel.connect(_wsUrl).cast<String>();
-  });
+  Future<void> initialSetup() async {
+    _client = Web3Client(_rpcUrl, Client(), socketConnector: () {
+      return IOWebSocketChannel.connect(_wsUrl).cast<String>();
+    });
 
-  await getAbi();
-  await getCredentials();
-  await getDeployedContract();
-  listenToEvents(); // Ajouter cette ligne pour commencer à écouter les événements
-  isLoading = false;
-  notifyListeners();
-}
-
+    await getAbi();
+    await getCredentials();
+    await getDeployedContract();
+    listenToEvents();
+    isLoading = false;
+    notifyListeners();
+  }
 
   Future<void> getAbi() async {
     try {
       String abiStringFile =
-          await rootBundle.loadString("assets/abi/Municipality.json");
+          await rootBundle.loadString("assets/abi/Manager.json");
       var jsonAbi = jsonDecode(abiStringFile);
 
       _abiCode = jsonEncode(jsonAbi["abi"]);
@@ -63,19 +61,50 @@ Future<void> initialSetup() async {
   }
 
   Future<void> getCredentials() async {
-    // Create credentials from the private key
     _credentials = await _client.credentialsFromPrivateKey(_privateKey);
   }
 
   Future<void> getDeployedContract() async {
-    // Load the deployed contract
     _contract = DeployedContract(
-        ContractAbi.fromJson(_abiCode, "Municipality"), _contractAddress);
+        ContractAbi.fromJson(_abiCode, "Manager"), _contractAddress);
 
-    // Extract functions
     _updateHoleState = _contract.function("updateHoleState");
-    _createReport = _contract.function("createReport");
-    _getReport = _contract.function("reports");
+    _getAllReports = _contract.function("getAllHoles");
+    _holeReportedEvent = _contract.event("HoleReported");
+  }
+
+  List<Map<String, dynamic>> reports = [];
+
+  Future<void> fetchReports() async {
+    isLoading = true;
+    notifyListeners();
+
+    try {
+      final result = await _client.call(
+        contract: _contract,
+        function: _getAllReports,
+        params: [],
+      );
+
+      reports = result.map((reportData) {
+        final data = reportData as List<dynamic>;
+        return {
+          "id": data[0].toInt(),
+          "location": data[1],
+          "timestamp":
+              DateTime.fromMillisecondsSinceEpoch(data[2].toInt() * 1000),
+          "reporter": data[3],
+          "state": data[4],
+        };
+      }).toList();
+
+      logger.i("Fetched reports: $reports");
+    } catch (e) {
+      logger.e("Error fetching reports: $e");
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
   }
 
   Future<void> updateHoleState(int reportId, int newState) async {
@@ -83,7 +112,6 @@ Future<void> initialSetup() async {
     notifyListeners();
 
     try {
-      // Send transaction to update the state of a report
       final txHash = await _client.sendTransaction(
         _credentials,
         Transaction.callContract(
@@ -95,108 +123,37 @@ Future<void> initialSetup() async {
       );
 
       transactionHash = txHash;
-      debugPrint("State updated successfully: $txHash");
+      logger.i("State updated successfully: $txHash");
     } catch (e) {
-      debugPrint("Error while updating state: $e");
-      transactionHash = null;
+      logger.e("Error while updating state: $e");
+    } finally {
+      isLoading = false;
+      notifyListeners();
     }
-
-    isLoading = false;
-    notifyListeners();
   }
-  List<Map<String, dynamic>> reports = [];
-
-  Future<void> fetchReports() async {
-  isLoading = true;
-  notifyListeners();
-
-  try {
-    // Appeler la fonction `getAllReportIds` pour obtenir tous les IDs des rapports
-    final getAllReportIdsFunction = _contract.function('getAllReportIds');
-    final reportIdsResult = await _client.call(
-      contract: _contract,
-      function: getAllReportIdsFunction,
-      params: [],
-    );
-
-    // Décoder les IDs des rapports
-    List<BigInt> reportIds = List<BigInt>.from(reportIdsResult[0]);
-
-    // Pour chaque ID de rapport, récupérer les détails du rapport
-    for (var reportId in reportIds) {
-      await _fetchReportDetails(reportId); // Utiliser _fetchReportDetails pour récupérer les détails du rapport
-    }
-
-    notifyListeners();
-  } catch (e) {
-    logger.e("Erreur lors de la récupération des rapports: $e");
-  }
-
-  isLoading = false;
-  notifyListeners();
-}
-
-Future<void> _fetchReportDetails(BigInt reportId) async {
-  try {
-    // Appeler la fonction `getReport` pour obtenir les détails du rapport
-    final getReportFunction = _contract.function('getReport');
-    final result = await _client.call(
-      contract: _contract,
-      function: getReportFunction,
-      params: [reportId],
-    );
-
-    // Décoder les détails du rapport
-    final report = {
-      "id": result[0].toInt(),
-      "location": result[1],
-      "timestamp": DateTime.fromMillisecondsSinceEpoch(result[2].toInt() * 1000),
-      "reporter": result[3].toString(),
-      "state": result[4].toInt(),
-      "stateTimestamp": DateTime.fromMillisecondsSinceEpoch(result[5].toInt() * 1000),
-    };
-
-    // Ajouter le rapport à la liste
-    reports.add(report);
-  } catch (e) {
-    logger.e("Erreur lors de la récupération des détails du rapport: $e");
-  }
-}
-
 
   Future<void> listenToEvents() async {
-    List<Map<String, dynamic>> reports = [];
     try {
-      // Définir le filtre pour écouter les événements "HoleReported"
-      final eventFilter = _contract.event('HoleReported');
-      _client.events(FilterOptions.events(contract: _contract, event: eventFilter)).listen((event) {
-        logger.d("Event received: ${event.topics}");
-        final decoded = eventFilter.decodeResults(event.topics!, event.data!);
-
-        // Extraire les détails de l'événement
-        final reportId = decoded[0] as BigInt;
-        final location = decoded[1] as String;
-        final reporter = decoded[2] as EthereumAddress;
-
-        // Ajouter un nouveau rapport à la liste
+      _client
+          .events(FilterOptions.events(
+              contract: _contract, event: _holeReportedEvent))
+          .listen((event) {
+        final decoded =
+            _holeReportedEvent.decodeResults(event.topics!, event.data!);
         final newReport = {
-          "id": reportId.toInt(),
-          "location": location,
+          "id": decoded[0].toInt(),
+          "location": decoded[1],
           "timestamp": DateTime.now(),
-          "reporter": reporter.hex,
-          "state": 0, // État initial
+          "reporter": decoded[3],
+          "state": 0,
         };
 
-        // Mettre à jour l'état de la liste
-        logger.d("New report added: $newReport");
         reports.add(newReport);
         notifyListeners();
+        logger.i("New report received: $newReport");
       });
     } catch (e) {
-      logger.e("Erreur lors de l'écoute des événements : $e");
+      logger.e("Error listening to events: $e");
     }
-    
   }
-
-
 }

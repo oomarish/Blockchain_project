@@ -10326,12 +10326,12 @@
     "5777": {
       "events": {},
       "links": {},
-      "address": "0x684623A14538Cd13eAA2A5a7443148463C6fd962",
-      "transactionHash": "0x82d41624d22e79f43cdc416c5622be159223af280fd4a314ac2a143236efd205"
+      "address": "0xE0d655DaCE8507E78a481A2DD44D3f1C62eF86d9",
+      "transactionHash": "0xad1a2a82f7fb2ac0bc1a5f97b931ccb8a7dcefcc5c9498b7a4f08ca8d02fe73e"
     }
   },
   "schemaVersion": "3.4.16",
-  "updatedAt": "2024-12-08T16:38:22.042Z",
+  "updatedAt": "2024-12-27T14:14:25.229Z",
   "networkType": "ethereum",
   "devdoc": {
     "kind": "dev",

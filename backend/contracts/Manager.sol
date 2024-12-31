@@ -97,7 +97,7 @@ contract Manager {
     }
 
     // Function to get all reported holes
-    function getAllHoles() public view returns (HoleReport[] memory) {
+    function getAllReports() public view returns (HoleReport[] memory) {
         HoleReport[] memory holeReports = new HoleReport[](reportCount);
         for (uint256 i = 1; i <= reportCount; i++) {
             holeReports[i - 1] = reports[i];
@@ -106,7 +106,8 @@ contract Manager {
     }
 
     // Function to get a specific hole report
-    function getHole(uint256 reportId) public view returns (HoleReport memory) {
+    function getReportById(uint256 reportId) public view returns (HoleReport memory) {
+        require(reports[reportId].id != 0, "Report does not exist");
         return reports[reportId];
     }
 }
